@@ -1,0 +1,56 @@
+# ── Python ──────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# ── Virtual environments ────────────────────────────────────────────
+.venv/
+venv/
+
+# ── Model binaries (lớn, mount qua volume) ─────────────────────────
+models/*.engine
+models/*.pt
+models/*.onnx
+models/**/*.engine
+models/**/*.pt
+models/**/*.onnx
+models/**/*.log
+
+# ── Experience logs ─────────────────────────────────────────────────
+logs/
+*.h5
+*.hdf5
+
+# ── IDE ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ── Generated proto ─────────────────────────────────────────────────
+src/communication/proto/*_pb2*.py
+
+# ── Env / secrets (contains IP, SSH key paths — never commit) ─────────
+env/sync.env
+
+# ── Research data (raw runs — large, machine-specific) ────────────────
+# Ignore raw per-run folders (config, env, metrics, artifacts)
+data/research_data/*/
+# But DO track the generated aggregate CSVs and README index
+!data/research_data/aggregated/
+!data/research_data/README.md
+
+# ── Agents ────────────────────────────────────────────────────────────
+.agent/
+
+# ── Dataset ───────────────────────────────────────────────────────────
+data/intent_dataset/
+data/roi_dataset/
