@@ -1,0 +1,50 @@
+services:
+  ai-pipeline:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.prod
+    environment:
+      CTX_RUNTIME_ROLE: ai-pipeline
+    volumes:
+      - ctx-aware-engines:/app/models/engines
+    command: ["python", "-m", "src.main"]
+
+  comm-layer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    environment:
+      CTX_RUNTIME_ROLE: comm-layer
+    volumes:
+      - ../src:/app/src
+      - ../config:/app/config
+      - ../scripts:/app/scripts
+    command: ["python", "-m", "src.main"]
+
+  monitor:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    environment:
+      CTX_RUNTIME_ROLE: monitor
+    volumes:
+      - ../src:/app/src
+      - ../config:/app/config
+      - ../scripts:/app/scripts
+      - ../tests:/app/tests
+    command: ["python", "scripts/benchmark.py", "--device", "ci", "--compare-baseline"]
+
+  watchdog:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    environment:
+      CTX_RUNTIME_ROLE: watchdog
+    volumes:
+      - ../src:/app/src
+      - ../config:/app/config
+      - ../scripts:/app/scripts
+    command: ["python", "-m", "src.main"]
+
+volumes:
+  ctx-aware-engines:
