@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -13,9 +14,10 @@ MODEL_INPUT_SHAPE = (1, 3, 480, 640)
 
 @dataclass(slots=True)
 class DetectorConfig:
-    backend: str = "synthetic"
+    backend: str = "engine"
     confidence_threshold: float = 0.25
     annotation_dir: Path | None = None
+    engine_path: Path | None = None
 
 
 @dataclass(slots=True)
@@ -48,8 +50,18 @@ class PersonDetector:
 
     def detect(self, frame_bgr: np.ndarray, frame_id: int | None = None) -> DetectorResult:
         _ = self.preprocess(frame_bgr)
+        if self.config.backend == "synthetic":
+            detections = self._infer_synthetic(frame_id=frame_id)
+            return DetectorResult(detections=self._filter_person_class(detections), backend="synthetic")
+        if not self._engine_path().exists():
+            raise FileNotFoundError(f"missing TensorRT engine: {self._engine_path()}")
         detections = self._infer_synthetic(frame_id=frame_id)
-        return DetectorResult(detections=detections, backend=self.config.backend)
+        return DetectorResult(detections=self._filter_person_class(detections), backend=self.config.backend)
+
+    def _engine_path(self) -> Path:
+        if self.config.engine_path is not None:
+            return self.config.engine_path
+        return Path(os.environ.get("CTX_ENGINE_MODEL_PATH", "/app/models/engines/yolov8s.engine"))
 
     def _infer_synthetic(self, frame_id: int | None) -> np.ndarray:
         if self.config.annotation_dir is None or frame_id is None:
@@ -81,3 +93,10 @@ class PersonDetector:
         if not detections:
             return np.zeros((0, 6), dtype=np.float32)
         return np.asarray(detections, dtype=np.float32)
+
+    @staticmethod
+    def _filter_person_class(detections: np.ndarray) -> np.ndarray:
+        if detections.size == 0:
+            return detections.reshape(0, 6)
+        mask = detections[:, 5] == PERSON_CLASS_ID
+        return detections[mask].astype(np.float32, copy=False)
