@@ -1,0 +1,12 @@
+name: benchmark-jetson
+
+on:
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Jetson benchmark
+        run: python3 scripts/benchmark.py --device jetson --frames 1000

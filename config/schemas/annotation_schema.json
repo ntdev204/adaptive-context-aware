@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["frame_id", "timestamp", "persons", "scene"],
+  "properties": {
+    "frame_id": {"type": "integer", "minimum": 0},
+    "timestamp": {"type": "integer"},
+    "persons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["bbox", "track_id", "activity"],
+        "properties": {
+          "bbox": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "track_id": {"type": "integer", "minimum": 0},
+          "activity": {
+            "type": "string",
+            "enum": ["WALKING", "RUNNING", "STANDING", "SITTING", "INTERACTING", "FALLING", "LOITERING", "FIGHTING", "OTHER"]
+          },
+          "intent_direction": {
+            "type": "string",
+            "enum": ["NORTH", "NE", "EAST", "SE", "SOUTH", "SW", "WEST", "NW", "STATIONARY"]
+          },
+          "trajectory_pred": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {"type": "number"},
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "is_anomaly": {"type": "boolean"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "scene": {
+      "type": "object",
+      "required": ["context", "crowd_density"],
+      "properties": {
+        "context": {
+          "type": "string",
+          "enum": ["CORRIDOR", "LOBBY", "GATE_AREA", "RESTAURANT", "OPEN_SPACE", "UNKNOWN"]
+        },
+        "crowd_density": {"type": "number", "minimum": 0, "maximum": 1},
+        "motion_entropy": {"type": "number", "minimum": 0, "maximum": 1},
+        "anomaly_flag": {"type": "boolean"}
+      }
+    }
+  }
+}
