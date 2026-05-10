@@ -89,8 +89,9 @@ context-aware/
 │   ├── router/              # Adaptive router + RL policy
 │   │   ├── adaptive_router.py
 │   │   └── rl_policy.py
-│   ├── reasoning/           # GRU, Attention, GNN pathways
+│   ├── reasoning/           # GRU, TCN, Attention, GNN pathways
 │   │   ├── gru_pathway.py
+│   │   ├── tcn_pathway.py
 │   │   ├── attention_pathway.py
 │   │   ├── gnn_pathway.py
 │   │   └── fusion.py
@@ -129,6 +130,8 @@ context-aware/
 │   └── generate_synthetic_fixtures.py
 ├── pipelines/               # Training pipelines (desktop)
 │   ├── train_detector.py
+│   ├── train_reasoning.py   # Joint training: GRU + TCN + Attention + GNN + Fusion
+│   ├── train_estimator.py
 │   ├── train_router_rl.py
 │   ├── train_gnn.py
 │   └── train_attention.py
@@ -192,7 +195,7 @@ context-aware/
 | **0** | Infrastructure      | Docker, CI/CD, project scaffold          | 1-2 weeks       | `PLAN-phase-0-infra.md`                       |
 | **0.5** | Data Foundation   | Schema, HDF5, fixtures, model contracts  | ~1 week         | `PLAN-phase-05-data-foundation.md`            |
 | **1** | Perception          | Detection + Tracking + Sensor fusion     | 2-3 weeks       | `PLAN-phase-1-perception.md`                  |
-| **2** | Adaptive Core       | Complexity Estimator + Router + Pathways | 3-4 weeks       | `PLAN-phase-2-adaptive-core.md`               |
+| **2** | Adaptive Core (Brain) | Complexity Estimator + Router + GRU/TCN/Attention/GNN + Fusion | 3-4 weeks       | `PLAN-phase-2-adaptive-core.md`               |
 | **3** | Behavior & Decision | Intent + Anomaly + Navigation            | 2-3 weeks       | `PLAN-phase-3-behavior.md`                    |
 | **4** | RL Policy           | Train PPO router + online adaptation     | 2-3 weeks       | `PLAN-phase-4-rl-policy.md`                   |
 | **5** | Safety & Monitoring | Fault tolerance + FSM + watchdog         | 1-2 weeks       | `PLAN-phase-5-safety.md`                      |
