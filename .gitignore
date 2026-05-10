@@ -27,6 +27,7 @@ models/**/*.log
 logs/
 *.h5
 *.hdf5
+!tests/fixtures/sample_recording.h5
 
 # ── IDE ─────────────────────────────────────────────────────────────
 .vscode/
@@ -54,3 +55,5 @@ data/research_data/*/
 # ── Dataset ───────────────────────────────────────────────────────────
 data/intent_dataset/
 data/roi_dataset/
+tests/fixtures/coco_person_100/
+tests/fixtures/mot17_subset/

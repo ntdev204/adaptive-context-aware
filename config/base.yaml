@@ -1,0 +1,11 @@
+network:
+  lidar_port: 9090
+  nav_port: 9091
+  soh_port: 9092
+  heartbeat_port: 9093
+safety:
+  heartbeat_interval_ms: 500
+  heartbeat_timeout_ms: 2000
+  heartbeat_check_interval_ms: 100
+logging:
+  level: INFO

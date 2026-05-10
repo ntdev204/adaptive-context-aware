@@ -1,0 +1,16 @@
+name: deploy
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build -f docker/Dockerfile.prod -t ghcr.io/${{ github.repository }}:${{ github.ref_name }} .
+      - name: Publish placeholder
+        run: echo "Registry push and Jetson pull hook should be configured with deployment secrets."

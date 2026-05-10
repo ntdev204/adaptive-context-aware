@@ -1,0 +1,21 @@
+{
+  "frame_id": 0,
+  "timestamp": 1715000000000000,
+  "persons": [
+    {
+      "bbox": [120, 80, 50, 120],
+      "track_id": 1,
+      "activity": "WALKING",
+      "intent_direction": "NORTH",
+      "trajectory_pred": [[130, 75], [140, 70]],
+      "is_anomaly": false,
+      "confidence": 0.92
+    }
+  ],
+  "scene": {
+    "context": "CORRIDOR",
+    "crowd_density": 0.15,
+    "motion_entropy": 0.22,
+    "anomaly_flag": false
+  }
+}

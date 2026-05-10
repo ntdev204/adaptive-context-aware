@@ -1,0 +1,11 @@
+{
+  "frame_id": 1,
+  "timestamp": 1715000000100000,
+  "persons": [],
+  "scene": {
+    "context": "LOBBY",
+    "crowd_density": 0.05,
+    "motion_entropy": 0.1,
+    "anomaly_flag": false
+  }
+}
