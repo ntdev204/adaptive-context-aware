@@ -53,7 +53,5 @@ data/research_data/*/
 .agent/
 
 # ── Dataset ───────────────────────────────────────────────────────────
-data/intent_dataset/
-data/roi_dataset/
 tests/fixtures/coco_person_100/
 tests/fixtures/mot17_subset/
