@@ -11,7 +11,7 @@ Thay rule-based router (Phase 2) bằng learned RL policy, tối ưu accuracy-la
 - [ ] **T4.1**: Implement simulation environment cho RL training
   - Gym-compatible env, simulates scenes với varying complexity
   - State: complexity metrics + soh_budget + scene_embedding
-  - Action: pathway selection {GRU_ONLY, GRU_ATTN, ATTN_GNN, ALL}
+  - Action: pathway selection {GRU_ONLY, GRU_TCN, GRU_TCN_ATTN, ALL}
   - Reward: accuracy - latency_penalty - energy_cost + anomaly_bonus
   → Verify: `env.step()` returns valid (state, reward, done, info)
 
