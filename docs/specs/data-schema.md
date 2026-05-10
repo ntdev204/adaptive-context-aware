@@ -185,6 +185,7 @@ session_YYYYMMDD_HHMMSS.h5
 | BoT-SORT | detections + depth | mixed | `[M, 5]` (x,y,w,h,track_id) | float32/int | <3ms |
 | Complexity Estimator | `[1, 36]` | float32 | `[1, 4]` (logits) | float32 | <1ms |
 | GRU Pathway | `[B, T, 128]` | float32 | `[B, 64]` | float32 | <2ms |
+| TCN Pathway | `[B, 128, T]` | float32 | `[B, 64]` | float32 | <3ms |
 | Attention Pathway | `[B, N, 128]` | float32 | `[B, 128]` | float32 | <8ms |
 | GNN Pathway | `[B, N, 128]` + adj `[N, N]` | float32 | `[B, 256]` | float32 | <15ms |
 | Intent Predictor | `[B, D]` | float32 | 3 heads (direction, activity, traj) | float32 | <3ms |
