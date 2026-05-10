@@ -31,3 +31,13 @@ def test_update_ci_baselines_script(tmp_path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert (output / "latency_baseline.json").exists()
     assert (output / "memory_baseline.json").exists()
+
+
+def test_perception_benchmark_report_contains_thresholds() -> None:
+    from scripts.benchmark import run_perception_benchmark
+
+    report = run_perception_benchmark(frames=5)
+    assert report["pipeline"]["fps"]["mean"] > 0
+    assert report["constraints"]["min_fps"] == 25.0
+    assert "detector" in report["per_module"]
+    assert "tracker" in report["per_module"]
