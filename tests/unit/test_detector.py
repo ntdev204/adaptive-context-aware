@@ -18,7 +18,7 @@ def test_detector_preprocess_matches_yolo_contract() -> None:
 
 def test_detector_reads_fixture_annotation_as_detection() -> None:
     root = Path(__file__).resolve().parents[1] / "fixtures" / "annotations"
-    detector = PersonDetector(DetectorConfig(annotation_dir=root))
+    detector = PersonDetector(DetectorConfig(backend="synthetic", annotation_dir=root))
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
     result = detector.detect(frame, frame_id=0)
     assert result.backend == "synthetic"
@@ -29,7 +29,7 @@ def test_detector_reads_fixture_annotation_as_detection() -> None:
 
 def test_detector_returns_empty_array_when_fixture_missing() -> None:
     root = Path(__file__).resolve().parents[1] / "fixtures" / "annotations"
-    detector = PersonDetector(DetectorConfig(annotation_dir=root))
+    detector = PersonDetector(DetectorConfig(backend="synthetic", annotation_dir=root))
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
     result = detector.detect(frame, frame_id=99)
     assert result.detections.shape == (0, 6)
@@ -40,3 +40,17 @@ def test_detector_rejects_wrong_frame_shape() -> None:
     frame = np.zeros((320, 240, 3), dtype=np.uint8)
     with pytest.raises(ValueError, match="expected BGR frame"):
         detector.preprocess(frame)
+
+
+def test_detector_engine_path_prefers_real_engine(tmp_path) -> None:
+    engine_path = tmp_path / "yolov8s.engine"
+    engine_path.write_bytes(b"fake-engine")
+    detector = PersonDetector(DetectorConfig(engine_path=engine_path))
+    assert detector._engine_path() == engine_path
+
+
+def test_detector_raises_when_engine_missing() -> None:
+    detector = PersonDetector(DetectorConfig(engine_path=Path("missing.engine")))
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    with pytest.raises(FileNotFoundError, match="missing TensorRT engine"):
+        detector.detect(frame, frame_id=0)

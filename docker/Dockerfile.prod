@@ -4,8 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_HOME=/app \
     CTX_ENGINE_CACHE_DIR=/app/models/engines \
-    CTX_ONNX_DIR=/app/models/onnx \
-    CTX_RUNTIME_BACKEND=onnxruntime
+    CTX_RUNTIME_BACKEND=engine
 
 WORKDIR ${APP_HOME}
 
@@ -13,13 +12,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     ca-certificates \
     coreutils \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml ./
 COPY src ./src
 COPY config ./config
 COPY scripts ./scripts
-COPY models/onnx ./models/onnx
 
 RUN mkdir -p /app/models/engines && pip install --no-cache-dir -e .
 
