@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package adaptive.context.v1;
+
+message SensorEnvelope {
+  string source_id = 1;
+  uint64 sequence = 2;
+  uint64 timestamp_us = 3;
+  oneof payload {
+    LidarScan lidar_scan = 10;
+    ImuSample imu_sample = 11;
+    PiStatus pi_status = 12;
+  }
+}
+
+message LidarScan {
+  repeated float angle_rad = 1;
+  repeated float range_m = 2;
+}
+
+message ImuSample {
+  float accel_x_mps2 = 1;
+  float accel_y_mps2 = 2;
+  float accel_z_mps2 = 3;
+  float quat_x = 4;
+  float quat_y = 5;
+  float quat_z = 6;
+  float quat_w = 7;
+}
+
+message PiStatus {
+  string state = 1;
+  float cpu_temp_c = 2;
+  float cpu_load_pct = 3;
+}

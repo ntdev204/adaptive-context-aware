@@ -1,8 +1,18 @@
 network:
+  jetson_host: 25.12.4.100
+  pi_host: 25.12.4.101
   lidar_port: 9090
   nav_port: 9091
   soh_port: 9092
   heartbeat_port: 9093
+  sensor_ingest_port: 5555
+  result_publish_port: 5556
+camera:
+  rgb_device: /dev/video0
+  depth_device: /dev/video1
+  width: 640
+  height: 480
+  fps: 30
 safety:
   heartbeat_interval_ms: 500
   heartbeat_timeout_ms: 2000
