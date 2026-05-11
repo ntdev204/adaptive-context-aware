@@ -21,6 +21,14 @@
       "dtype": "float32",
       "checksum": 0.0
     },
+    "tcn": {
+      "shape": [
+        2,
+        64
+      ],
+      "dtype": "float32",
+      "checksum": 0.0
+    },
     "attention": {
       "shape": [
         2,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -31,6 +32,9 @@ def test_update_ci_baselines_script(tmp_path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert (output / "latency_baseline.json").exists()
     assert (output / "memory_baseline.json").exists()
+    assert (output / "output_reference" / "tcn_ref.npy").exists()
+    latency = json.loads((output / "latency_baseline.json").read_text(encoding="utf-8"))
+    assert "tcn_pathway" in latency["models"]
 
 
 def test_perception_benchmark_report_contains_thresholds() -> None:

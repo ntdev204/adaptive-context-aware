@@ -18,6 +18,7 @@ def _contract_outputs() -> dict[str, np.ndarray]:
     return {
         "yolov8s": np.zeros((5, 6), dtype=np.float32),
         "gru": np.zeros((2, 64), dtype=np.float32),
+        "tcn": np.zeros((2, 64), dtype=np.float32),
         "attention": np.zeros((2, 128), dtype=np.float32),
         "gnn": np.zeros((2, 256), dtype=np.float32),
         "estimator": np.zeros((1, 4), dtype=np.float32),
@@ -42,6 +43,7 @@ def _synthetic_ci_metrics() -> dict[str, object]:
         "latency_ms": {
             "yolov8s": 45.2,
             "gru_pathway": 0.8,
+            "tcn_pathway": 1.6,
             "attention_pathway": 3.1,
             "gnn_pathway": 8.5,
             "complexity_estimator": 0.2,
@@ -79,6 +81,7 @@ def update_ci_baselines(source: str, output_dir: Path) -> None:
             "models": {
                 "yolov8s": {"ci_cpu_ms": metrics["latency_ms"]["yolov8s"], "tolerance_pct": 15},
                 "gru_pathway": {"ci_cpu_ms": metrics["latency_ms"]["gru_pathway"], "tolerance_pct": 15},
+                "tcn_pathway": {"ci_cpu_ms": metrics["latency_ms"]["tcn_pathway"], "tolerance_pct": 15},
                 "attention_pathway": {"ci_cpu_ms": metrics["latency_ms"]["attention_pathway"], "tolerance_pct": 15},
                 "gnn_pathway": {"ci_cpu_ms": metrics["latency_ms"]["gnn_pathway"], "tolerance_pct": 15},
                 "complexity_estimator": {
