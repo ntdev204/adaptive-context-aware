@@ -5,7 +5,7 @@
   "staleness_failure_days": 90,
   "synthetic": true,
   "output_reference_meta": {
-    "yolov8s": {
+    "yolo11s": {
       "shape": [
         5,
         6

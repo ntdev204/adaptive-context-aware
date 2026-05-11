@@ -72,7 +72,7 @@ class PersonDetector:
     def _engine_path(self) -> Path:
         if self.config.engine_path is not None:
             return self.config.engine_path
-        return Path(os.environ.get("CTX_ENGINE_MODEL_PATH", "/app/models/engines/yolov8s.engine"))
+        return Path(os.environ.get("CTX_ENGINE_MODEL_PATH", "/app/models/engines/yolo11s.engine"))
 
     def _get_runtime(self) -> DetectorRuntime:
         if self._runtime is None:
@@ -136,7 +136,7 @@ class PersonDetector:
             output = output.T
         if output.shape[1] < 5:
             raise ValueError("detector runtime output must include boxes and class scores")
-        return self._postprocess_yolov8_raw(output, frame_shape)
+        return self._postprocess_yolo11_raw(output, frame_shape)
 
     def _postprocess_nms_output(self, output: np.ndarray, frame_shape: tuple[int, int, int]) -> np.ndarray:
         confidence_mask = output[:, 4] >= self.config.confidence_threshold
@@ -149,7 +149,7 @@ class PersonDetector:
         detections[xyxy_mask, 3] -= detections[xyxy_mask, 1]
         return self._clip_detections(detections, frame_shape)
 
-    def _postprocess_yolov8_raw(self, output: np.ndarray, frame_shape: tuple[int, int, int]) -> np.ndarray:
+    def _postprocess_yolo11_raw(self, output: np.ndarray, frame_shape: tuple[int, int, int]) -> np.ndarray:
         boxes_xywh = output[:, :4]
         class_scores = output[:, 4:]
         class_ids = np.argmax(class_scores, axis=1).astype(np.float32)

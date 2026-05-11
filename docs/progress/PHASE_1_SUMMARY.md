@@ -70,10 +70,10 @@
   - Xác nhận `messages_received` tăng và `decode_errors` giữ 0.
 
 ### 3. Validation TensorRT runtime cho detector trên Jetson
-- **Mục tiêu:** xác nhận `TensorRTEngineRunner` load được `yolov8s.engine` thật và perception runtime chạy đầy đủ end-to-end.
+- **Mục tiêu:** xác nhận `TensorRTEngineRunner` load được `yolo11s.engine` thật và perception runtime chạy đầy đủ end-to-end.
 - **Hướng dẫn thực hiện chi tiết:**
-  - Build detector engine trên Jetson bằng `python scripts/bootstrap_engine.py --engine-dir models/engines --model-name yolov8s`.
-  - Chạy một frame thật qua `PersonDetector(DetectorConfig(engine_path=Path("models/engines/yolov8s.engine")))`.
+  - Build detector engine trên Jetson bằng `python scripts/bootstrap_engine.py --engine-dir models/engines --model-name yolo11s`.
+  - Chạy một frame thật qua `PersonDetector(DetectorConfig(engine_path=Path("models/engines/yolo11s.engine")))`.
   - Giữ nguyên input contract `(480, 640, 3) -> [N, 6]` để không phá pipeline hiện có.
   - Chạy lại:
     - `python -m pytest`

@@ -4,7 +4,7 @@
   "ci_runner": "bootstrap",
   "capture_note": "baselines MUST be captured on CI runner (same hardware class), not Jetson",
   "models": {
-    "yolov8s": {
+    "yolo11s": {
       "ci_cpu_ms": 45.2,
       "tolerance_pct": 15
     },
