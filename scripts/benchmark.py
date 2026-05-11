@@ -195,9 +195,10 @@ def run_jetson(frames: int) -> int:
 
 
 def run_perception_benchmark(frames: int = 100) -> dict[str, object]:
+    from src.perception.detector import DetectorConfig, PersonDetector
     from src.perception.pipeline import PerceptionPipeline
 
-    pipeline = PerceptionPipeline()
+    pipeline = PerceptionPipeline(detector=PersonDetector(DetectorConfig(backend="synthetic")))
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
     depth = np.full((480, 640), 2.0, dtype=np.float32)
     lidar = np.array([[0.0, 2.0], [0.05, 2.0], [0.10, 2.0]], dtype=np.float32)

@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package adaptive.context.v1;
+
+message PerceptionResultEnvelope {
+  string source_id = 1;
+  uint64 sequence = 2;
+  uint64 timestamp_us = 3;
+  repeated TrackedEntity entities = 10;
+  RuntimeMetrics metrics = 11;
+}
+
+message TrackedEntity {
+  uint32 track_id = 1;
+  repeated float bbox_xywh = 2;
+  repeated float position_xyz_m = 3;
+  repeated float velocity_xyz_mps = 4;
+  float heading_rad = 5;
+  float confidence = 6;
+  optional float nearest_obstacle_distance_m = 7;
+}
+
+message RuntimeMetrics {
+  float total_latency_ms = 1;
+  float camera_latency_ms = 2;
+  float detector_latency_ms = 3;
+  float fusion_latency_ms = 4;
+  float fps = 5;
+}

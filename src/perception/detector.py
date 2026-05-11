@@ -26,15 +26,12 @@ class DetectorResult:
     backend: str
 
 
-class PersonDetector:
-    """Phase 1 baseline detector.
+class TensorRTInferenceUnavailableError(RuntimeError):
+    pass
 
-    This keeps the Phase 1 contract honest without pretending to ship real YOLO
-    inference in a repo that does not yet contain model weights. It supports:
-    - preprocessing to YOLO contract shape `[1, 3, 480, 640]`
-    - synthetic detections from annotation fixtures
-    - a stable fallback path for empty detections
-    """
+
+class PersonDetector:
+    """Engine-only detector contract for Jetson runtime."""
 
     def __init__(self, config: DetectorConfig | None = None) -> None:
         self.config = config or DetectorConfig()
@@ -51,12 +48,16 @@ class PersonDetector:
     def detect(self, frame_bgr: np.ndarray, frame_id: int | None = None) -> DetectorResult:
         _ = self.preprocess(frame_bgr)
         if self.config.backend == "synthetic":
-            detections = self._infer_synthetic(frame_id=frame_id)
-            return DetectorResult(detections=self._filter_person_class(detections), backend="synthetic")
-        if not self._engine_path().exists():
-            raise FileNotFoundError(f"missing TensorRT engine: {self._engine_path()}")
-        detections = self._infer_synthetic(frame_id=frame_id)
-        return DetectorResult(detections=self._filter_person_class(detections), backend=self.config.backend)
+            return DetectorResult(
+                detections=self._infer_synthetic(frame_id),
+                backend=self.config.backend,
+            )
+        engine_path = self._engine_path()
+        if not engine_path.exists():
+            raise FileNotFoundError(f"missing TensorRT engine: {engine_path}")
+        raise TensorRTInferenceUnavailableError(
+            "TensorRT engine exists but runtime inference bindings are not implemented yet"
+        )
 
     def _engine_path(self) -> Path:
         if self.config.engine_path is not None:

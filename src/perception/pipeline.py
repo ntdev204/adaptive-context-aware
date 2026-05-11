@@ -25,7 +25,7 @@ class PerceptionPipelineReport:
 @dataclass(slots=True)
 class PerceptionPipeline:
     detector: PersonDetector = field(
-        default_factory=lambda: PersonDetector(DetectorConfig(backend="synthetic"))
+        default_factory=lambda: PersonDetector(DetectorConfig(backend="engine"))
     )
     depth_processor: DepthProcessor = field(
         default_factory=lambda: DepthProcessor(

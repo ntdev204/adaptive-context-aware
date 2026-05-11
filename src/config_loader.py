@@ -8,10 +8,14 @@ from pydantic import BaseModel, Field
 
 
 class NetworkConfig(BaseModel):
+    jetson_host: str
+    pi_host: str
     lidar_port: int = Field(ge=1, le=65535)
     nav_port: int = Field(ge=1, le=65535)
     soh_port: int = Field(ge=1, le=65535)
     heartbeat_port: int = Field(ge=1, le=65535)
+    sensor_ingest_port: int = Field(ge=1, le=65535)
+    result_publish_port: int = Field(ge=1, le=65535)
 
 
 class SafetyConfig(BaseModel):
@@ -24,9 +28,18 @@ class LoggingConfig(BaseModel):
     level: str
 
 
+class CameraConfig(BaseModel):
+    rgb_device: str
+    depth_device: str
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+    fps: int = Field(gt=0)
+
+
 class AppConfig(BaseModel):
     environment: Literal["dev", "test", "prod"]
     network: NetworkConfig
+    camera: CameraConfig
     safety: SafetyConfig
     logging: LoggingConfig
 

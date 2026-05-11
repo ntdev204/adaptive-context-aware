@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from src.perception.detector import DetectorConfig, PersonDetector
+from src.perception.detector import DetectorConfig, PersonDetector, TensorRTInferenceUnavailableError
 
 
 def test_detector_preprocess_matches_yolo_contract() -> None:
@@ -47,6 +47,15 @@ def test_detector_engine_path_prefers_real_engine(tmp_path) -> None:
     engine_path.write_bytes(b"fake-engine")
     detector = PersonDetector(DetectorConfig(engine_path=engine_path))
     assert detector._engine_path() == engine_path
+
+
+def test_detector_engine_backend_fails_until_tensorrt_bindings_exist(tmp_path) -> None:
+    engine_path = tmp_path / "yolov8s.engine"
+    engine_path.write_bytes(b"fake-engine")
+    detector = PersonDetector(DetectorConfig(engine_path=engine_path))
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    with pytest.raises(TensorRTInferenceUnavailableError):
+        detector.detect(frame, frame_id=0)
 
 
 def test_detector_raises_when_engine_missing() -> None:
