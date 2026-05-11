@@ -25,10 +25,10 @@ class FakeRuntime:
 
 class CountingRuntimeFactory:
     OUTPUT_DIMS = {
-        "gru_pathway.onnx": 64,
-        "tcn_pathway.onnx": 64,
-        "attention_pathway.onnx": 128,
-        "gnn_pathway.onnx": 256,
+        "gru_pathway.engine": 64,
+        "tcn_pathway.engine": 64,
+        "attention_pathway.engine": 128,
+        "gnn_pathway.engine": 256,
     }
 
     def __init__(self) -> None:
@@ -56,7 +56,7 @@ def test_reasoning_wrappers_are_lazy_loaded() -> None:
     assert output.shape == (2, 64)
     assert gru.is_loaded
     assert not tcn.is_loaded
-    assert [path.name for path in factory.created] == ["gru_pathway.onnx"]
+    assert [path.name for path in factory.created] == ["gru_pathway.engine"]
 
     gru.infer(np.zeros((2, 8, 128), dtype=np.float32))
 

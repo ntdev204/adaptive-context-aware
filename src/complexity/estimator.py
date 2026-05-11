@@ -9,6 +9,7 @@ from typing import Protocol
 import numpy as np
 
 from src.perception.sensor_fusion import FusedEntity
+from src.runtime.tensorrt_engine import TensorRTEngineRunner
 
 
 class ComplexityLevel(IntEnum):
@@ -41,7 +42,7 @@ class EstimatorRuntime(Protocol):
 
 
 class ComplexityEstimator:
-    DEFAULT_MODEL_PATH = Path("models/onnx/estimator.onnx")
+    DEFAULT_MODEL_PATH = Path("models/engines/estimator.engine")
     INPUT_DIM = 36
     SCENE_EMBEDDING_DIM = 32
 
@@ -50,7 +51,7 @@ class ComplexityEstimator:
         model_path: str | Path = DEFAULT_MODEL_PATH,
         runtime: EstimatorRuntime | None = None,
     ) -> None:
-        self.runtime = runtime or _OnnxEstimatorRuntime(Path(model_path))
+        self.runtime = runtime or _TensorRTEstimatorRuntime(Path(model_path))
 
     def estimate_from_entities(
         self,
@@ -176,20 +177,15 @@ class ComplexityEstimator:
         return np.tile(base, 2)[: cls.SCENE_EMBEDDING_DIM].astype(np.float32, copy=False)
 
 
-class _OnnxEstimatorRuntime:
+class _TensorRTEstimatorRuntime:
     def __init__(self, model_path: Path) -> None:
         if not model_path.exists():
-            raise FileNotFoundError(f"complexity estimator ONNX model not found: {model_path}")
-        try:
-            import onnxruntime as ort
-        except ImportError as exc:
-            raise RuntimeError("onnxruntime is required to load the complexity estimator ONNX model") from exc
-
-        self.session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
-        self.input_name = self.session.get_inputs()[0].name
+            raise FileNotFoundError(f"complexity estimator TensorRT engine not found: {model_path}")
+        self.model_path = model_path
+        self.runner = TensorRTEngineRunner(model_path, ("complexity_features",))
 
     def run(self, input_batch: np.ndarray) -> np.ndarray:
-        return self.session.run(None, {self.input_name: input_batch.astype(np.float32, copy=False)})[0]
+        return self.runner.run(input_batch)
 
 
 def _motion_entropy(entities: Sequence[FusedEntity]) -> float:

@@ -8,7 +8,7 @@ from .runtime import LazyPathwayInference, RuntimeFactory, as_float32_array, val
 
 
 class GnnPathwayInference(LazyPathwayInference):
-    DEFAULT_MODEL_PATH = Path("models/onnx/gnn_pathway.onnx")
+    DEFAULT_MODEL_PATH = Path("models/engines/gnn_pathway.engine")
 
     def __init__(
         self,

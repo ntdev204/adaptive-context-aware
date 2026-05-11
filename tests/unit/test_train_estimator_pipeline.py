@@ -28,15 +28,12 @@ def test_train_estimator_reaches_validation_accuracy_and_saves_checkpoint(tmp_pa
             learning_rate=0.02,
             seed=13,
             checkpoint_path=tmp_path / "complexity_estimator.pt",
-            onnx_path=tmp_path / "estimator.onnx",
-            export_onnx=False,
         )
     )
 
     assert result.validation_accuracy >= 0.90
     assert result.checkpoint_path is not None
     assert result.checkpoint_path.exists()
-    assert result.onnx_path is None
 
 
 def test_train_estimator_rejects_invalid_dataset_size() -> None:

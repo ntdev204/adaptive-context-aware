@@ -20,7 +20,7 @@ Thay rule-based router (Phase 2) bằng learned RL policy, tối ưu accuracy-la
   - Train trên desktop GPU
   → Verify: Reward curve increases over training
 
-- [ ] **T4.3**: Export trained policy → ONNX → TensorRT
+- [ ] **T4.3**: Build trained policy → TensorRT `.engine`
   → Verify: Policy inference <1ms trên Jetson
 
 - [ ] **T4.4**: Integrate RL policy vào `adaptive_router.py`
