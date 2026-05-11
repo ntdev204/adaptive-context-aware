@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -16,6 +17,8 @@ def main() -> None:
     root = ROOT
     output = root / "tests" / "fixtures" / "sample_recording.h5"
     output.parent.mkdir(parents=True, exist_ok=True)
+    images_dir = root / "tests" / "fixtures" / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
 
     rgb = np.zeros((2, 480, 640, 3), dtype=np.uint8)
     depth = np.ones((2, 480, 640), dtype=np.float32)
@@ -48,6 +51,12 @@ def main() -> None:
         frame_annotations=[{"frame_id": 0}, {"frame_id": 1}],
         scene_annotations=[{"context": "UNKNOWN"}, {"context": "UNKNOWN"}],
     )
+
+    for index in range(5):
+        image = np.zeros((240, 320, 3), dtype=np.uint8)
+        image[:, :, 1] = 40 * index
+        image[40:200, 120:200, 2] = 180
+        Image.fromarray(image).save(images_dir / f"person_{index:02d}.png")
 
 
 if __name__ == "__main__":
