@@ -12,6 +12,10 @@ class TransitionResult:
     reason: StatusChangeReason | None
 
 
+class InvalidTransitionError(ValueError):
+    pass
+
+
 class SafetyStateMachine:
     def __init__(self) -> None:
         self.state = SafetyState.NORMAL
@@ -19,7 +23,7 @@ class SafetyStateMachine:
     def request_transition(self, target: SafetyState, reason: StatusChangeReason | None = None) -> TransitionResult:
         current = self.state
         if not self._is_valid_transition(current, target):
-            raise ValueError(f"invalid transition {current.name}->{target.name}")
+            raise InvalidTransitionError(f"invalid transition {current.name}->{target.name}")
         self.state = target
         return TransitionResult(old_state=current, new_state=target, reason=reason)
 
