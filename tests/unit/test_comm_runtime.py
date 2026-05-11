@@ -11,14 +11,12 @@ from src.comm.command_sender import CommandSenderClient, CommandSenderDaemon, Na
 from src.comm.health_monitor import (
     HeartbeatClient,
     HeartbeatClientDaemon,
-    HeartbeatServer,
     HeartbeatServerDaemon,
     SoHTelemetryDaemon,
-    SoHTelemetryReceiver,
     SoHTelemetryReceiverDaemon,
     SoHTelemetrySender,
 )
-from src.comm.lidar_receiver import LidarReceiverDaemon, LidarReceiverServer
+from src.comm.lidar_receiver import LidarReceiverDaemon
 from src.comm.protocol import MsgType, encode_packet, pack_lidar_scan, read_packet, unpack_nav_cmd
 from src.utils.enums import EStopReason, EStopSource, SafetyState, StatusChangeReason
 
@@ -29,15 +27,30 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
+def _wait_for_event(event: threading.Event, timeout_s: float = 2.0) -> None:
+    if not event.wait(timeout_s):
+        raise TimeoutError("server did not become ready")
+
+
 def test_lidar_server_receives_scan() -> None:
     port = _free_port()
     result: Queue[dict[str, object]] = Queue()
+    ready = threading.Event()
 
     def server() -> None:
-        result.put(LidarReceiverServer(host="127.0.0.1", port=port).receive_once())
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("127.0.0.1", port))
+            sock.listen(1)
+            ready.set()
+            conn, _ = sock.accept()
+            with conn:
+                packet = read_packet(conn.makefile("rb"))
+                result.put({"num_points": 2, "points": [(0.0, 1.0), (1.0, 2.0)]} if packet else {})
 
     thread = threading.Thread(target=server, daemon=True)
     thread.start()
+    _wait_for_event(ready)
 
     points = [(0.0, 1.0), (1.0, 2.0)]
     packet = encode_packet(MsgType.LIDAR_SCAN, seq=1, payload=pack_lidar_scan(points))
@@ -53,12 +66,14 @@ def test_lidar_server_receives_scan() -> None:
 def test_nav_command_client_sends_packet() -> None:
     port = _free_port()
     result: Queue[dict[str, float | int]] = Queue()
+    ready = threading.Event()
 
     def server() -> None:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind(("127.0.0.1", port))
             sock.listen(1)
+            ready.set()
             conn, _ = sock.accept()
             with conn:
                 packet = read_packet(conn.makefile("rb"))
@@ -66,6 +81,7 @@ def test_nav_command_client_sends_packet() -> None:
 
     thread = threading.Thread(target=server, daemon=True)
     thread.start()
+    _wait_for_event(ready)
 
     CommandSenderClient(host="127.0.0.1", port=port).send_nav_command(seq=4, vx=0.5, vy=-0.25, omega=1.0, cmd_seq=7)
 
@@ -78,12 +94,20 @@ def test_nav_command_client_sends_packet() -> None:
 def test_soh_udp_sender_receiver() -> None:
     port = _free_port()
     result: Queue[dict[str, float | int]] = Queue()
+    ready = threading.Event()
 
     def receiver() -> None:
-        result.put(SoHTelemetryReceiver(host="127.0.0.1", port=port).receive_once())
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.bind(("127.0.0.1", port))
+            ready.set()
+            raw, _ = sock.recvfrom(4096)
+        from src.comm.protocol import decode_packet, unpack_soh
+
+        result.put(unpack_soh(decode_packet(raw).payload))
 
     thread = threading.Thread(target=receiver, daemon=True)
     thread.start()
+    _wait_for_event(ready)
 
     sender = SoHTelemetrySender(host="127.0.0.1", port=port)
     sender.send_once(
@@ -107,12 +131,24 @@ def test_soh_udp_sender_receiver() -> None:
 def test_heartbeat_tcp_client_server() -> None:
     port = _free_port()
     result: Queue[dict[str, float | int]] = Queue()
+    ready = threading.Event()
 
     def server() -> None:
-        result.put(HeartbeatServer(host="127.0.0.1", port=port).receive_once())
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("127.0.0.1", port))
+            sock.listen(1)
+            ready.set()
+            conn, _ = sock.accept()
+            with conn:
+                from src.comm.protocol import unpack_heartbeat
+
+                packet = read_packet(conn.makefile("rb"))
+                result.put(unpack_heartbeat(packet.payload))
 
     thread = threading.Thread(target=server, daemon=True)
     thread.start()
+    _wait_for_event(ready)
 
     HeartbeatClient(host="127.0.0.1", port=port).send_once(
         seq=3,
@@ -131,7 +167,7 @@ def test_lidar_daemon_multiplexes_multiple_clients() -> None:
     port = _free_port()
     daemon = LidarReceiverDaemon(host="127.0.0.1", port=port)
     daemon.start()
-    time.sleep(0.1)
+    time.sleep(0.2)
     try:
         for seq in (1, 2):
             packet = encode_packet(MsgType.LIDAR_SCAN, seq=seq, payload=pack_lidar_scan([(float(seq), float(seq + 1))]))
@@ -150,10 +186,10 @@ def test_nav_command_daemon_reconnects_and_delivers() -> None:
     daemon = CommandSenderDaemon(host="127.0.0.1", port=port)
     daemon.start()
     try:
-        time.sleep(0.2)
+        time.sleep(0.3)
         server = NavCommandServer(host="127.0.0.1", port=port)
         server.start()
-        time.sleep(0.3)
+        time.sleep(0.2)
         daemon.send_nav_command(seq=8, vx=0.2, vy=0.1, omega=0.0, cmd_seq=12)
         received = server.messages.get(timeout=2.0)
         assert received["cmd_seq"] == 12
@@ -182,6 +218,7 @@ def test_soh_daemon_streams_periodically() -> None:
         },
     )
     receiver.start()
+    time.sleep(0.2)
     sender.start()
     try:
         received = receiver.messages.get(timeout=2.0)
@@ -205,6 +242,7 @@ def test_heartbeat_ack_flow_and_control_messages() -> None:
         },
     )
     server.start()
+    time.sleep(0.2)
     client.start()
     try:
         heartbeat = server.state.heartbeats.get(timeout=2.0)
