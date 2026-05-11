@@ -42,16 +42,10 @@ src/communication/proto/*_pb2*.py
 # ── Env / secrets (contains IP, SSH key paths — never commit) ─────────
 env/sync.env
 
-# ── Research data (raw runs — large, machine-specific) ────────────────
-# Ignore raw per-run folders (config, env, metrics, artifacts)
-data/research_data/*/
-# But DO track the generated aggregate CSVs and README index
-!data/research_data/aggregated/
-!data/research_data/README.md
-
 # ── Agents ────────────────────────────────────────────────────────────
 .agent/
 
 # ── Dataset ───────────────────────────────────────────────────────────
 tests/fixtures/coco_person_100/
 tests/fixtures/mot17_subset/
+data/
