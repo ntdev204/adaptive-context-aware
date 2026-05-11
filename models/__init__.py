@@ -2,7 +2,8 @@
 
 from .attention_pathway import AttentionPathway
 from .complexity_estimator import ComplexityEstimatorNet
+from .gnn_pathway import GraphAttentionPathway
 from .gru_pathway import GruPathway
 from .tcn_pathway import TcnPathway
 
-__all__ = ["AttentionPathway", "ComplexityEstimatorNet", "GruPathway", "TcnPathway"]
+__all__ = ["AttentionPathway", "ComplexityEstimatorNet", "GraphAttentionPathway", "GruPathway", "TcnPathway"]
