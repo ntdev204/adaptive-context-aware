@@ -1,7 +1,7 @@
-"""Phase 2 neural network definitions."""
+"""Neural network definitions for adaptive reasoning and decision layers."""
 
-from .attention_pathway import AttentionPathway
 from .anomaly_detector import AnomalyAutoencoder
+from .attention_pathway import AttentionPathway
 from .complexity_estimator import ComplexityEstimatorNet
 from .gated_fusion import GatedFusion
 from .gnn_pathway import GraphAttentionPathway
