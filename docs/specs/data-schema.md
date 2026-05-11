@@ -181,7 +181,7 @@ session_YYYYMMDD_HHMMSS.h5
 
 | Model | Input Shape | Input Dtype | Output Shape | Output Dtype | Latency Target |
 |-------|-------------|-------------|--------------|-------------|----------------|
-| YOLOv8-s | `[1, 3, 480, 640]` | float32 | `[N, 6]` (x,y,w,h,conf,cls) | float32 | <8ms |
+| YOLOv11-s | `[1, 3, 480, 640]` | float32 | `[N, 6]` (x,y,w,h,conf,cls) | float32 | <8ms |
 | BoT-SORT | detections + depth | mixed | `[M, 5]` (x,y,w,h,track_id) | float32/int | <3ms |
 | Complexity Estimator | `[1, 36]` | float32 | `[1, 4]` (logits) | float32 | <1ms |
 | GRU Pathway | `[B, T, 128]` | float32 | `[B, 64]` | float32 | <2ms |

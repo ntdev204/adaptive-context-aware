@@ -129,7 +129,7 @@ soh_budget = weighted_mean(soh_factors)  # 0.0 = critical, 1.0 = healthy
 
 | Component | Model | Format | Size | Latency | Input |
 |-----------|-------|--------|------|---------|-------|
-| Detection | YOLOv8-s | TensorRT FP16 | ~14MB | ~8ms | RGB 640×480 |
+| Detection | YOLOv11-s | TensorRT FP16 | ~14MB | ~8ms | RGB 640×480 |
 | Tracking | BoT-SORT | C++/Python | ~2MB | ~3ms | Detections + depth |
 | Depth Proc | Custom | CUDA kernel | <1MB | ~2ms | Depth map 640×480 |
 | LiDAR Proc | Custom | NumPy/CUDA | <1MB | ~2ms | 2D scan points |
@@ -251,7 +251,7 @@ reward = (
 | Container | Docker + NVIDIA runtime | Reproducibility + GPU access |
 | RL algorithm | PPO | Stable, works with discrete actions |
 | Tracking | BoT-SORT | Best accuracy/speed on Jetson |
-| Detection | YOLOv8-s | Proven, TensorRT export mature |
+| Detection | YOLOv11-s | Modern small detector for Jetson deployment |
 | Monitoring | Prometheus + custom | Lightweight, edge-compatible |
 
 ---

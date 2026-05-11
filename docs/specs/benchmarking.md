@@ -35,7 +35,7 @@ tests/benchmark/baselines/
 ├── latency_baseline.json      # per-model CPU latency reference
 ├── memory_baseline.json       # peak RSS reference
 ├── output_reference/          # stored model outputs for parity check
-│   ├── yolov8s_ref.npy
+│   ├── yolo11s_ref.npy
 │   ├── gru_ref.npy
 │   ├── tcn_ref.npy
 │   ├── attention_ref.npy
@@ -54,7 +54,7 @@ tests/benchmark/baselines/
   "ci_runner": "ubuntu-24.04",
   "capture_note": "baselines MUST be captured on CI runner (same hardware class), not Jetson",
   "models": {
-    "yolov8s": {"ci_cpu_ms": 45.2, "tolerance_pct": 15},
+    "yolo11s": {"ci_cpu_ms": 45.2, "tolerance_pct": 15},
     "gru_pathway": {"ci_cpu_ms": 0.8, "tolerance_pct": 15},
     "tcn_pathway": {"ci_cpu_ms": 1.2, "tolerance_pct": 15},
     "attention_pathway": {"ci_cpu_ms": 3.1, "tolerance_pct": 15},
@@ -147,7 +147,7 @@ python scripts/benchmark.py --device jetson --frames 1000
 
 ## 4. Bootstrap Threshold Table
 
-### Detection (YOLOv8-s)
+### Detection (YOLOv11-s)
 
 | Metric | Bootstrap Target | Dataset | Upgrade When |
 |--------|-----------------|---------|--------------|
@@ -244,7 +244,7 @@ python scripts/update_ci_baselines.py --source ci-runner --output tests/benchmar
     "tracker": {"latency_ms": {"p50": 2.8, "p95": 3.1}}
   },
   "models": {
-    "yolov8s": {"format": "TRT_FP16", "size_mb": 14},
+    "yolo11s": {"format": "TRT_FP16", "size_mb": 14},
     "gru": {"format": "TRT_FP16", "size_mb": 0.15},
     "tcn": {"format": "TRT_FP16", "size_mb": 0.23}
   },

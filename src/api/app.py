@@ -75,7 +75,7 @@ def _load_runtime_config() -> RuntimeConfig:
         sensor_ingest_port=int(os.environ.get("CTX_SENSOR_INGEST_PORT", "5555")),
         result_publish_port=int(os.environ.get("CTX_RESULT_PUBLISH_PORT", "5556")),
         max_sensor_age_ms=int(os.environ.get("CTX_MAX_SENSOR_AGE_MS", "250")),
-        engine_path=os.environ.get("CTX_ENGINE_MODEL_PATH", "/app/models/engines/yolov8s.engine"),
+        engine_path=os.environ.get("CTX_ENGINE_MODEL_PATH", "/app/models/engines/yolo11s.engine"),
         camera_rgb_device=os.environ.get("CTX_ASTRAS_RGB_DEVICE", "/dev/video0"),
         camera_depth_device=os.environ.get("CTX_ASTRAS_DEPTH_DEVICE", "/dev/video1"),
         camera_width=int(os.environ.get("CTX_ASTRAS_WIDTH", "640")),

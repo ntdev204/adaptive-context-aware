@@ -25,7 +25,7 @@ class RuntimeConfig:
     sensor_ingest_port: int = 5555
     result_publish_port: int = 5556
     max_sensor_age_ms: int = 250
-    engine_path: str = "/app/models/engines/yolov8s.engine"
+    engine_path: str = "/app/models/engines/yolo11s.engine"
     camera_rgb_device: str = "/dev/video0"
     camera_depth_device: str = "/dev/video1"
     camera_width: int = 640

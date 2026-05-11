@@ -15,7 +15,7 @@ Tối ưu toàn bộ pipeline cho production trên Jetson: INT8 quantization, me
 
 ## Tasks
 
-- [ ] **T6.1**: Build tất cả models → TensorRT `.engine` (YOLOv8-s, GRU, TCN, Attention, GNN, RL policy)
+- [ ] **T6.1**: Build tất cả models → TensorRT `.engine` (YOLOv11-s, GRU, TCN, Attention, GNN, RL policy)
   → Verify: TensorRT engines produce expected output shapes and values within tolerance vs PyTorch checkpoints
 
 - [ ] **T6.2**: TensorRT FP16 engine validation — tất cả models

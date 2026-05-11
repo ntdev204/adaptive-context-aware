@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ultralytics import YOLO
 
-DEFAULT_MODEL_NAME = "yolov8s"
+DEFAULT_MODEL_NAME = "yolo11s"
 DEFAULT_IMAGE_SIZE = 640
 
 

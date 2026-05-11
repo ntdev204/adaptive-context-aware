@@ -16,7 +16,7 @@ BASELINE_DIR = ROOT / "tests" / "benchmark" / "baselines"
 
 def _contract_outputs() -> dict[str, np.ndarray]:
     return {
-        "yolov8s": np.zeros((5, 6), dtype=np.float32),
+        "yolo11s": np.zeros((5, 6), dtype=np.float32),
         "gru": np.zeros((2, 64), dtype=np.float32),
         "tcn": np.zeros((2, 64), dtype=np.float32),
         "attention": np.zeros((2, 128), dtype=np.float32),
@@ -41,7 +41,7 @@ def _synthetic_ci_metrics() -> dict[str, object]:
     return {
         "synthetic": True,
         "latency_ms": {
-            "yolov8s": 45.2,
+            "yolo11s": 45.2,
             "gru_pathway": 0.8,
             "tcn_pathway": 1.6,
             "attention_pathway": 3.1,
@@ -79,7 +79,7 @@ def update_ci_baselines(source: str, output_dir: Path) -> None:
             "ci_runner": source,
             "capture_note": "baselines MUST be captured on CI runner (same hardware class), not Jetson",
             "models": {
-                "yolov8s": {"ci_cpu_ms": metrics["latency_ms"]["yolov8s"], "tolerance_pct": 15},
+                "yolo11s": {"ci_cpu_ms": metrics["latency_ms"]["yolo11s"], "tolerance_pct": 15},
                 "gru_pathway": {"ci_cpu_ms": metrics["latency_ms"]["gru_pathway"], "tolerance_pct": 15},
                 "tcn_pathway": {"ci_cpu_ms": metrics["latency_ms"]["tcn_pathway"], "tolerance_pct": 15},
                 "attention_pathway": {"ci_cpu_ms": metrics["latency_ms"]["attention_pathway"], "tolerance_pct": 15},
@@ -183,7 +183,7 @@ def run_jetson(frames: int) -> int:
             "tracker": {"latency_ms": {"p50": 2.8, "p95": 3.1}},
         },
         "models": {
-            "yolov8s": {"format": "TRT_FP16", "size_mb": 14},
+            "yolo11s": {"format": "TRT_FP16", "size_mb": 14},
             "gru": {"format": "TRT_FP16", "size_mb": 0.5},
         },
         "pass": True,

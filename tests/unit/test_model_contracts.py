@@ -5,7 +5,7 @@ import numpy as np
 
 def test_model_contract_shapes() -> None:
     contracts = {
-        "yolov8_s": ((1, 3, 480, 640), np.float32, (5, 6), np.float32),
+        "yolo11_s": ((1, 3, 480, 640), np.float32, (5, 6), np.float32),
         "complexity_estimator": ((1, 36), np.float32, (1, 4), np.float32),
         "gru_pathway": ((2, 8, 128), np.float32, (2, 64), np.float32),
         "attention_pathway": ((2, 6, 128), np.float32, (2, 128), np.float32),

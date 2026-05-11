@@ -8,7 +8,7 @@ Xây dựng perception pipeline chạy ≥25 FPS trên Jetson, output: tracked e
 
 ## Tasks
 
-- [ ] **T1.1**: Implement `detector.py` — YOLOv8-s inference via TensorRT `.engine`
+- [ ] **T1.1**: Implement `detector.py` — YOLOv11-s inference via TensorRT `.engine`
   → Verify: Detect persons trong test image, mAP check
 
 - [ ] **T1.2**: Implement `depth_proc.py` — RGB-D depth map → 3D bounding box per detection
