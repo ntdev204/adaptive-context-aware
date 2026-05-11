@@ -186,7 +186,7 @@ Implement hệ thống AI "nghĩ tỷ lệ thuận với độ phức tạp" —
 ### Phần B: System Integration
 
 - [ ] **T2.7**: Implement `src/complexity/estimator.py` — Wrapper cho Complexity Estimator
-  - Load trained model từ `models/onnx/estimator.onnx`
+  - Load trained TensorRT engine từ `models/engines/estimator.engine`
   - Extract scene metrics từ perception output → build 36-dim input vector
   → Verify: Correct classification trên synthetic test cases
 
@@ -203,7 +203,7 @@ Implement hệ thống AI "nghĩ tỷ lệ thuận với độ phức tạp" —
   → Verify: LOW → GRU_ONLY, HIGH → GRU+TCN+ATTN, CRITICAL → ALL, SoH override works
 
 - [ ] **T2.10**: Implement `src/reasoning/` — Pathway inference wrappers
-  - Mỗi file load ONNX/TensorRT model tương ứng
+  - Mỗi file load TensorRT `.engine` tương ứng
   - `gru_pathway.py`, `tcn_pathway.py`, `attention_pathway.py`, `gnn_pathway.py`
   - Lazy loading: chỉ load model khi Router activate pathway đó
   → Verify: Lazy loading works (RAM chỉ tăng khi pathway activated)
@@ -216,7 +216,7 @@ Implement hệ thống AI "nghĩ tỷ lệ thuận với độ phức tạp" —
 - [ ] **T2.12**: Implement `pipelines/train_estimator.py` — Train Complexity Estimator
   - Dataset: synthetic scenes với labeled complexity levels
   - Loss: CrossEntropy
-  - Export: PyTorch → ONNX → (later) TensorRT
+  - Output: PyTorch checkpoint; TensorRT `.engine` build chạy riêng trên Jetson
   → Verify: Accuracy ≥90% trên validation set
 
 - [ ] **T2.13**: Implement `pipelines/train_reasoning.py` — Joint training cho 4 pathways + fusion
@@ -228,13 +228,13 @@ Implement hệ thống AI "nghĩ tỷ lệ thuận với độ phức tạp" —
     - Anomaly score (BCE)
     - Auxiliary: reconstruction loss cho representation quality
   - Optimizer: AdamW, lr=1e-3, weight_decay=1e-4
-  - Export: mỗi pathway → riêng ONNX file
-  → Verify: Loss converges, mỗi pathway export thành công
+  - Output: checkpoint reasoning brain; mỗi pathway được build thành `.engine` riêng trên Jetson
+  → Verify: Loss converges, mỗi pathway build engine thành công
 
-- [ ] **T2.14**: ONNX export script — `scripts/export_brain_onnx.py`
-  - Export 6 models: estimator, gru, tcn, attention, gnn, fusion
-  - Validate: ONNX checker + shape verification
-  → Verify: Tất cả 6 file `.onnx` valid, inference output khớp PyTorch
+- [ ] **T2.14**: TensorRT engine build script — `scripts/build_brain_engines.py`
+  - Build 6 engines: estimator, gru, tcn, attention, gnn, fusion
+  - Validate: PyTorch shape check + engine artifact metadata
+  → Verify: Tất cả 6 file `.engine` tồn tại dưới `models/engines/` và output shape khớp contract
 
 ### Phần D: Testing & Integration
 
@@ -290,14 +290,13 @@ models/                     # Custom network definitions (PyTorch)
 ├── attention_pathway.py
 ├── gnn_pathway.py
 ├── gated_fusion.py
-├── onnx/                   # Exported ONNX files
-│   ├── estimator.onnx
-│   ├── gru.onnx
-│   ├── tcn.onnx            # ← NEW
-│   ├── attention.onnx
-│   ├── gnn.onnx
-│   └── fusion.onnx
 └── engines/                # TensorRT engines (built on Jetson, cached)
+    ├── estimator.engine
+    ├── gru_pathway.engine
+    ├── tcn_pathway.engine
+    ├── attention_pathway.engine
+    ├── gnn_pathway.engine
+    └── gated_fusion.engine
 
 pipelines/                  # Training scripts (desktop GPU)
 ├── train_estimator.py
@@ -312,7 +311,7 @@ pipelines/                  # Training scripts (desktop GPU)
 
 - [ ] Tất cả 6 custom networks (`nn.Module`) defined, forward pass works
 - [ ] Training pipeline runs, loss converges
-- [ ] ONNX export thành công cho tất cả 6 models
+- [ ] TensorRT `.engine` build thành công cho tất cả 6 models
 - [ ] Adaptive routing works: LOW scene <5ms, MED <10ms, HIGH <20ms, CRITICAL <35ms
 - [ ] SoH-aware: GPU hot → auto-downgrade pathway
 - [ ] Lazy loading: RAM chỉ tăng khi pathway activated

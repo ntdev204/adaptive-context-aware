@@ -7,11 +7,11 @@ import numpy as np
 
 from src.router.adaptive_router import ReasoningPathway
 
-from .runtime import OnnxPathwayRuntime, PathwayRuntime, RuntimeFactory, as_float32_array
+from .runtime import PathwayRuntime, RuntimeFactory, TensorRTEngineRuntime, as_float32_array
 
 
 class GatedFusionInference:
-    DEFAULT_MODEL_PATH = Path("models/onnx/gated_fusion.onnx")
+    DEFAULT_MODEL_PATH = Path("models/engines/gated_fusion.engine")
     PATHWAY_DIMS = {
         ReasoningPathway.GRU: 64,
         ReasoningPathway.TCN: 64,
@@ -27,7 +27,7 @@ class GatedFusionInference:
         runtime_factory: RuntimeFactory | None = None,
     ) -> None:
         self.model_path = Path(model_path)
-        self.runtime_factory = runtime_factory or OnnxPathwayRuntime
+        self.runtime_factory = runtime_factory or TensorRTEngineRuntime
         self.input_names = ("pathway_outputs", "active_mask")
         self._offsets = self._build_offsets()
         self._runtime: PathwayRuntime | None = None

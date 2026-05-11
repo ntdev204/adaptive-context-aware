@@ -8,7 +8,7 @@
 ## PHÂN HỆ I: PHASE 1.0 (Perception Core)
 
 ### 1. Detection + Tracking + Sensor Fusion
-- **Detector chuyển sang engine-first contract:** pipeline mặc định dùng backend `engine`; nếu thiếu file engine sẽ raise `FileNotFoundError`, nếu có engine nhưng chưa có binding TensorRT runtime sẽ raise `TensorRTInferenceUnavailableError` để fail-fast thay vì giả lập kết quả.
+- **Detector chuyển sang engine-first runtime:** pipeline mặc định dùng backend `engine`; nếu thiếu file engine sẽ raise `FileNotFoundError`, nếu engine có lỗi load/chạy sẽ raise `TensorRTInferenceUnavailableError`, còn đường happy path dùng `TensorRTEngineRunner` và postprocess output về contract `[N, 6]`.
 - **Depth/LiDAR/Tracker đã chốt baseline tính toán:** depth projection trả về thông tin 3D bbox theo intrinsics; LiDAR xử lý scan và clustering ổn định; tracker giữ `track_id`, kết hợp `IoU + depth gate`, loại stale tracks.
 - **IMU và sensor fusion hoàn tất mặt interface:** IMU update cho ego-motion và fusion hợp nhất track + motion + lidar thành entity record thống nhất cho downstream.
 
@@ -69,13 +69,12 @@
     - `docker logs <control-api-container>`
   - Xác nhận `messages_received` tăng và `decode_errors` giữ 0.
 
-### 3. Hoàn tất binding TensorRT runtime cho detector (điểm còn thiếu của Phase 1)
-- **Mục tiêu:** thay fail-fast hiện tại bằng inference engine thật để perception runtime chạy đầy đủ end-to-end.
+### 3. Validation TensorRT runtime cho detector trên Jetson
+- **Mục tiêu:** xác nhận `TensorRTEngineRunner` load được `yolov8s.engine` thật và perception runtime chạy đầy đủ end-to-end.
 - **Hướng dẫn thực hiện chi tiết:**
-  - Mở file `src/perception/detector.py`.
-  - Thay đoạn raise `TensorRTInferenceUnavailableError` bằng lệnh gọi inference binding thực tế (TensorRT hoặc wrapper đã chuẩn hoá).
+  - Build detector engine trên Jetson bằng `python scripts/bootstrap_engine.py --engine-dir models/engines --model-name yolov8s`.
+  - Chạy một frame thật qua `PersonDetector(DetectorConfig(engine_path=Path("models/engines/yolov8s.engine")))`.
   - Giữ nguyên input contract `(480, 640, 3) -> [N, 6]` để không phá pipeline hiện có.
-  - Bổ sung test ở `tests/unit/test_detector.py` cho đường chạy engine-success.
   - Chạy lại:
     - `python -m pytest`
     - `python scripts/benchmark.py --device perception --frames 1000`

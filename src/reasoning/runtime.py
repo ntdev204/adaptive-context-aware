@@ -6,6 +6,8 @@ from typing import Protocol
 
 import numpy as np
 
+from src.runtime.tensorrt_engine import TensorRTEngineRunner
+
 
 class PathwayRuntime(Protocol):
     def run(self, *inputs: np.ndarray) -> np.ndarray:
@@ -15,27 +17,16 @@ class PathwayRuntime(Protocol):
 RuntimeFactory = Callable[[Path, tuple[str, ...]], PathwayRuntime]
 
 
-class OnnxPathwayRuntime:
+class TensorRTEngineRuntime:
     def __init__(self, model_path: Path, input_names: tuple[str, ...]) -> None:
         if not model_path.exists():
-            raise FileNotFoundError(f"pathway ONNX model not found: {model_path}")
-        try:
-            import onnxruntime as ort
-        except ImportError as exc:
-            raise RuntimeError("onnxruntime is required to load pathway ONNX models") from exc
-
-        self.session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
-        session_inputs = self.session.get_inputs()
-        self.input_names = input_names or tuple(input_.name for input_ in session_inputs)
+            raise FileNotFoundError(f"pathway TensorRT engine not found: {model_path}")
+        self.model_path = model_path
+        self.input_names = input_names
+        self.runner = TensorRTEngineRunner(model_path, input_names)
 
     def run(self, *inputs: np.ndarray) -> np.ndarray:
-        if len(inputs) != len(self.input_names):
-            raise ValueError(f"expected {len(self.input_names)} inputs, got {len(inputs)}")
-        feed = {
-            name: values.astype(np.float32, copy=False)
-            for name, values in zip(self.input_names, inputs, strict=True)
-        }
-        return self.session.run(None, feed)[0]
+        return self.runner.run(*inputs)
 
 
 class LazyPathwayInference:
@@ -49,7 +40,7 @@ class LazyPathwayInference:
         self.model_path = Path(model_path)
         self.input_names = input_names
         self.output_dim = output_dim
-        self.runtime_factory = runtime_factory or OnnxPathwayRuntime
+        self.runtime_factory = runtime_factory or TensorRTEngineRuntime
         self._runtime: PathwayRuntime | None = None
 
     @property

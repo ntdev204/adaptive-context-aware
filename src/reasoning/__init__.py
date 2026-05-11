@@ -5,7 +5,7 @@ from .brain_pipeline import AdaptiveBrainPipeline, BrainPipelineResult
 from .fusion import GatedFusionInference
 from .gnn_pathway import GnnPathwayInference
 from .gru_pathway import GruPathwayInference
-from .runtime import LazyPathwayInference, OnnxPathwayRuntime, PathwayRuntime
+from .runtime import LazyPathwayInference, PathwayRuntime, TensorRTEngineRuntime
 from .tcn_pathway import TcnPathwayInference
 
 __all__ = [
@@ -16,7 +16,7 @@ __all__ = [
     "GnnPathwayInference",
     "GruPathwayInference",
     "LazyPathwayInference",
-    "OnnxPathwayRuntime",
     "PathwayRuntime",
+    "TensorRTEngineRuntime",
     "TcnPathwayInference",
 ]

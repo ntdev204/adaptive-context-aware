@@ -43,7 +43,7 @@ Xây dựng hệ thống AI nhận thức bối cảnh thích ứng (adaptive) t
 
 | Component     | Technology                        | Rationale                 |
 | ------------- | --------------------------------- | ------------------------- |
-| AI Inference  | TensorRT + ONNX Runtime           | Best perf trên Jetson     |
+| AI Inference  | TensorRT `.engine`                | Best perf trên Jetson     |
 | GPU Compute   | CUDA 12.x                         | Direct GPU access         |
 | Detection     | YOLOv8-s                          | Proven, TRT export mature |
 | Tracking      | BoT-SORT                          | Best accuracy/speed ratio |
@@ -118,14 +118,13 @@ context-aware/
 │   │   ├── hdf5_recorder.py     # Phase 0.5
 │   │   └── hdf5_reader.py       # Phase 0.5
 │   └── main.py              # Entry point
-├── models/                  # ONNX + TensorRT engines
-│   ├── onnx/
+├── models/                  # TensorRT engines
 │   └── engines/             # .engine built on Jetson, cached in Docker volume
 ├── scripts/
 │   ├── build_engines.sh     # trtexec wrapper
 │   ├── benchmark.py         # --device ci | --device jetson
 │   ├── update_ci_baselines.py
-│   ├── export_onnx.py
+│   ├── build_brain_engines.py
 │   ├── download_fixtures.py
 │   └── generate_synthetic_fixtures.py
 ├── pipelines/               # Training pipelines (desktop)
@@ -242,7 +241,7 @@ Phase -1 (Specifications)
   - Latency <15% regression, RSS <10% regression
 - [ ] Docker prod image builds: `docker build -f docker/Dockerfile.prod -t ctx-aware:prod .`
 - [ ] Engine cache works: restart container → `.engine` loaded from volume (no rebuild)
-- [ ] ONNX fallback works: delete `.engine` + fail `trtexec` → ONNX Runtime inference succeeds
+- [ ] Engine-only failure path works: delete `.engine` + fail build/load → service stops or enters documented degraded mode
 - [ ] Safety FSM: all transitions match `safety-state-machine.md` §4
 - [ ] E-Stop: heartbeat loss → motors stop <2s
 - [ ] Anomaly detection recall ≥80% on bootstrap test set
@@ -256,7 +255,7 @@ Phase -1 (Specifications)
 | Risk                                | Impact | Mitigation                                         |
 | ----------------------------------- | ------ | -------------------------------------------------- |
 | 8GB RAM not enough for all pathways | HIGH   | Lazy loading: only load active pathway weights     |
-| TensorRT build fails on Jetson      | MED    | Cache .engine in Docker volume, fallback to ONNX Runtime |
+| TensorRT build fails on Jetson      | MED    | Cache `.engine` in Docker volume, fail fast with clear logs, keep system in degraded/safe mode |
 | RL policy doesn't converge          | MED    | Start with rule-based router, add RL incrementally |
 | LiDAR TCP latency too high          | MED    | Optimize packet size, match `communication-protocol.md` spec |
 | Camera + LiDAR sync drift           | MED    | Timestamp-based sync per `data-schema.md` §2       |
@@ -268,11 +267,11 @@ Phase -1 (Specifications)
 
 ### Docker / TensorRT Strategy
 
-- Docker image ships **ONNX models only** (architecture-independent)
-- `entrypoint.sh` runs `trtexec` on first boot to build `.engine` files
+- Docker image/model volume uses **TensorRT `.engine` artifacts only**
+- Build `.engine` files on the target Jetson before production run or during explicit bootstrap
 - Built `.engine` files cached in **Docker volume** (`ctx-aware-engines:/app/models/engines`)
-- Subsequent starts skip build if valid `.engine` exists and ONNX hash matches
-- If TensorRT build fails → **fallback to ONNX Runtime** (degraded performance, logged as WARNING)
+- Subsequent starts skip build if valid `.engine` exists and metadata hash matches
+- If TensorRT build/load fails → no CPU inference fallback; keep robot in degraded/safe mode and log ERROR
 - `.engine` files are architecture-specific: MUST be built ON the Jetson
 
 ### Safety Ownership

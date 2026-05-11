@@ -8,7 +8,7 @@ from .runtime import LazyPathwayInference, RuntimeFactory, as_float32_array, val
 
 
 class AttentionPathwayInference(LazyPathwayInference):
-    DEFAULT_MODEL_PATH = Path("models/onnx/attention_pathway.onnx")
+    DEFAULT_MODEL_PATH = Path("models/engines/attention_pathway.engine")
 
     def __init__(
         self,

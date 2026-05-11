@@ -20,8 +20,6 @@ class EstimatorTrainingConfig:
     learning_rate: float = 0.02
     seed: int = 7
     checkpoint_path: Path = Path("models/checkpoints/complexity_estimator.pt")
-    onnx_path: Path = Path("models/onnx/estimator.onnx")
-    export_onnx: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,7 +28,6 @@ class EstimatorTrainingResult:
     final_train_loss: float
     epochs: int
     checkpoint_path: Path | None
-    onnx_path: Path | None
 
 
 def generate_synthetic_complexity_dataset(
@@ -104,13 +101,11 @@ def train_estimator(config: EstimatorTrainingConfig = EstimatorTrainingConfig())
 
     validation_accuracy = evaluate_accuracy(model, validation_dataset)
     checkpoint_path = _save_checkpoint(model, config.checkpoint_path)
-    onnx_path = _export_onnx(model, config.onnx_path) if config.export_onnx else None
     return EstimatorTrainingResult(
         validation_accuracy=validation_accuracy,
         final_train_loss=final_loss,
         epochs=config.epochs,
         checkpoint_path=checkpoint_path,
-        onnx_path=onnx_path,
     )
 
 
@@ -162,31 +157,14 @@ def _save_checkpoint(model: ComplexityEstimatorNet, checkpoint_path: Path) -> Pa
     return checkpoint_path
 
 
-def _export_onnx(model: ComplexityEstimatorNet, onnx_path: Path) -> Path:
-    onnx_path.parent.mkdir(parents=True, exist_ok=True)
-    model.eval()
-    torch.onnx.export(
-        model,
-        torch.zeros(1, 36, dtype=torch.float32),
-        onnx_path,
-        input_names=["complexity_features"],
-        output_names=["logits"],
-        dynamic_axes={"complexity_features": {0: "batch"}, "logits": {0: "batch"}},
-        opset_version=17,
-    )
-    return onnx_path
-
-
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train and export the Phase 2 complexity estimator.")
+    parser = argparse.ArgumentParser(description="Train the Phase 2 complexity estimator checkpoint.")
     parser.add_argument("--samples-per-level", type=int, default=EstimatorTrainingConfig.samples_per_level)
     parser.add_argument("--epochs", type=int, default=EstimatorTrainingConfig.epochs)
     parser.add_argument("--batch-size", type=int, default=EstimatorTrainingConfig.batch_size)
     parser.add_argument("--learning-rate", type=float, default=EstimatorTrainingConfig.learning_rate)
     parser.add_argument("--seed", type=int, default=EstimatorTrainingConfig.seed)
     parser.add_argument("--checkpoint-path", type=Path, default=EstimatorTrainingConfig.checkpoint_path)
-    parser.add_argument("--onnx-path", type=Path, default=EstimatorTrainingConfig.onnx_path)
-    parser.add_argument("--no-onnx", action="store_true")
     args = parser.parse_args()
 
     result = train_estimator(
@@ -197,14 +175,10 @@ def main() -> None:
             learning_rate=args.learning_rate,
             seed=args.seed,
             checkpoint_path=args.checkpoint_path,
-            onnx_path=args.onnx_path,
-            export_onnx=not args.no_onnx,
         )
     )
     print(f"validation_accuracy={result.validation_accuracy:.4f}")
     print(f"checkpoint_path={result.checkpoint_path}")
-    if result.onnx_path is not None:
-        print(f"onnx_path={result.onnx_path}")
 
 
 if __name__ == "__main__":

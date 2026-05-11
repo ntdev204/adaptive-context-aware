@@ -21,8 +21,8 @@
 
 | Metric | Method | Pass/Fail |
 |--------|--------|-----------|
-| ONNX output shape parity | Load each model, run dummy input, check output shape | Shape matches `data-schema.md` §5 |
-| ONNX output value parity | Compare outputs vs stored reference (tolerance 1e-3) | Max abs diff < 1e-3 |
+| TensorRT engine output shape parity | Load each model contract, run dummy input, check output shape | Shape matches `data-schema.md` §5 |
+| TensorRT engine output value parity | Compare outputs vs stored reference (tolerance 1e-3 in CI, 1e-2 on Jetson FP16) | Max abs diff within tier tolerance |
 | CPU relative latency | Run 100 inferences per model on CI CPU, compare vs stored baseline | Fail if >15% slower |
 | Peak RSS | Measure peak RSS during full pipeline run (1000 frames synthetic) | Fail if >10% higher than baseline |
 | Protocol/schema tests | Run `pytest tests/unit/test_protocol.py tests/unit/test_data_schema.py` | All pass |
@@ -211,7 +211,7 @@ python scripts/update_ci_baselines.py --source ci-runner --output tests/benchmar
 
 | Trigger | Action |
 |---------|--------|
-| New model version pushed | Re-run baseline capture on Jetson |
+| New model version pushed | Re-run baseline capture on CI runner; validate `.engine` on Jetson |
 | Major dependency update | Re-run baseline capture |
 | New release tag | Mandatory baseline refresh |
 | CI false positives (>3 in a row) | Investigate, then refresh if legitimate |

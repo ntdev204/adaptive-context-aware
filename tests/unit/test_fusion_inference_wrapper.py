@@ -41,7 +41,7 @@ def test_fusion_wrapper_is_lazy_loaded() -> None:
 
     assert output.shape == (2, 256)
     assert fusion.is_loaded
-    assert [path.name for path in factory.created] == ["gated_fusion.onnx"]
+    assert [path.name for path in factory.created] == ["gated_fusion.engine"]
     assert factory.runtime.calls == 1
 
 
