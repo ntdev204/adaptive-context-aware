@@ -12,6 +12,10 @@
       "ci_cpu_ms": 0.8,
       "tolerance_pct": 15
     },
+    "tcn_pathway": {
+      "ci_cpu_ms": 1.6,
+      "tolerance_pct": 15
+    },
     "attention_pathway": {
       "ci_cpu_ms": 3.1,
       "tolerance_pct": 15
