@@ -46,6 +46,6 @@ env/sync.env
 .agent/
 
 # ── Dataset ───────────────────────────────────────────────────────────
-tests/fixtures/coco_person_100/
-tests/fixtures/mot17_subset/
+tests/fixtures/cctv_person_subset/
+tests/fixtures/mot20_subset/
 data/

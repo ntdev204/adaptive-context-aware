@@ -1,0 +1,21 @@
+{
+  "frame_id": 2,
+  "timestamp": 1715000000200000,
+  "persons": [
+    {
+      "bbox": [90, 95, 42, 116],
+      "track_id": 2,
+      "activity": "STANDING",
+      "intent_direction": "STATIONARY",
+      "trajectory_pred": [[90, 95], [90, 95]],
+      "is_anomaly": false,
+      "confidence": 0.88
+    }
+  ],
+  "scene": {
+    "context": "LOBBY",
+    "crowd_density": 0.2,
+    "motion_entropy": 0.08,
+    "anomaly_flag": false
+  }
+}
