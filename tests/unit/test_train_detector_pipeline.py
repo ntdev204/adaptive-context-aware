@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from pipelines.train_detector import (
-    build_merged_person_dataset,
+    build_merged_dataset,
     build_person_only_dataset,
     plan_detector_training,
 )
@@ -41,14 +41,15 @@ def test_build_person_only_dataset_filters_non_person_classes(tmp_path) -> None:
 def test_build_merged_person_dataset_combines_custom_sets(tmp_path) -> None:
     dataset_a = _write_dataset(tmp_path, name="custom_1", class_names=["a", "b", "c", "d", "nguoi", "f"])
     dataset_b = _write_dataset(tmp_path, name="custom_2", class_names=["a", "b", "c", "d", "nguoi", "f"])
-    yaml_a = build_person_only_dataset(dataset_a, tmp_path / "converted")
-    yaml_b = build_person_only_dataset(dataset_b, tmp_path / "converted")
+    yaml_a = dataset_a / "data.yaml"
+    yaml_b = dataset_b / "data.yaml"
 
-    merged_yaml = build_merged_person_dataset([yaml_a, yaml_b], tmp_path / "merged")
+    merged_yaml = build_merged_dataset([yaml_a, yaml_b], tmp_path / "merged")
 
     train_images = list((merged_yaml.parent / "train" / "images").glob("*.jpg"))
     assert len(train_images) == 2
     assert merged_yaml.exists()
+    assert "nguoi" in merged_yaml.read_text(encoding="utf-8")
 
 
 def test_plan_detector_training_generates_expected_outputs(tmp_path) -> None:
@@ -74,7 +75,6 @@ def test_plan_detector_training_generates_expected_outputs(tmp_path) -> None:
                 "project_name": "detector",
                 "run_name_pretrain": "pretrain",
                 "run_name_finetune": "finetune",
-                "person_class_name": "nguoi",
             },
         )()
     )

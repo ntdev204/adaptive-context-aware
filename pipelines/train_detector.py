@@ -25,8 +25,7 @@ class DetectorTrainingConfig:
     workers: int = 2
     project_name: str = "detector"
     run_name_pretrain: str = "pretrain-cctv-person"
-    run_name_finetune: str = "finetune-school-person"
-    person_class_name: str = "nguoi"
+    run_name_finetune: str = "finetune-school-multiclass"
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,11 +93,16 @@ def build_person_only_dataset(
     return dataset_yaml
 
 
-def build_merged_person_dataset(dataset_yamls: list[Path], output_root: str | Path) -> Path:
+def build_merged_dataset(dataset_yamls: list[Path], output_root: str | Path) -> Path:
     output_dir = Path(output_root)
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    names = _load_dataset_names(dataset_yamls[0])
+    for dataset_yaml in dataset_yamls[1:]:
+        if _load_dataset_names(dataset_yaml) != names:
+            raise ValueError("all custom datasets must share the same class ordering")
 
     for split in ("train", "valid", "test"):
         split_images = output_dir / split / "images"
@@ -125,8 +129,8 @@ def build_merged_person_dataset(dataset_yamls: list[Path], output_root: str | Pa
                 "train": "../train/images",
                 "val": "../valid/images",
                 "test": "../test/images",
-                "nc": 1,
-                "names": ["person"],
+                "nc": len(names),
+                "names": names,
             },
             sort_keys=False,
         ),
@@ -136,18 +140,9 @@ def build_merged_person_dataset(dataset_yamls: list[Path], output_root: str | Pa
 
 
 def plan_detector_training(config: DetectorTrainingConfig = DetectorTrainingConfig()) -> DetectorTrainingPlan:
-    person_only_root = config.work_dir / "person_only_datasets"
-    converted_dataset_yamls = [
-        build_person_only_dataset(
-            dataset_dir,
-            person_only_root,
-            person_class_name=config.person_class_name,
-        )
-        for dataset_dir in config.custom_datasets
-    ]
-    merged_dataset_yaml = build_merged_person_dataset(
-        converted_dataset_yamls,
-        config.work_dir / "merged_person_dataset",
+    merged_dataset_yaml = build_merged_dataset(
+        [dataset_dir / "data.yaml" for dataset_dir in config.custom_datasets],
+        config.work_dir / "merged_custom_dataset",
     )
     pretrain_weights = config.work_dir / config.project_name / config.run_name_pretrain / "weights" / "best.pt"
     finetune_weights = config.work_dir / config.project_name / config.run_name_finetune / "weights" / "best.pt"
@@ -217,7 +212,6 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=DetectorTrainingConfig.batch_size)
     parser.add_argument("--device", default=DetectorTrainingConfig.device)
     parser.add_argument("--workers", type=int, default=DetectorTrainingConfig.workers)
-    parser.add_argument("--person-class-name", default=DetectorTrainingConfig.person_class_name)
     parser.add_argument("--plan-only", action="store_true")
     args = parser.parse_args()
 
@@ -232,13 +226,17 @@ def main() -> None:
         batch_size=args.batch_size,
         device=args.device,
         workers=args.workers,
-        person_class_name=args.person_class_name,
     )
 
     plan = plan_detector_training(config) if args.plan_only else train_detector(config)
     print(f"pretrain_best={plan.pretrain_weights}")
     print(f"finetune_best={plan.finetune_weights}")
     print(f"merged_dataset={plan.merged_dataset_yaml}")
+
+
+def _load_dataset_names(dataset_yaml: Path) -> list[str]:
+    payload = load_yolo_dataset_config(dataset_yaml)
+    return list(payload["names"])
 
 
 if __name__ == "__main__":
