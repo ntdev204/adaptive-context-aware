@@ -8,8 +8,6 @@ import numpy as np
 from .depth_proc import CameraIntrinsics, DepthProcessor
 from .detector import DetectorConfig, PersonDetector
 from .feature_extractor import EntityFeatureExtractor
-from .imu_fusion import IMUFusion
-from .lidar_proc import LidarProcessor
 from .sensor_fusion import SensorFusion
 from .tracker import MultiObjectTracker
 
@@ -32,9 +30,7 @@ class PerceptionPipeline:
             CameraIntrinsics(fx=400.0, fy=400.0, cx=320.0, cy=240.0)
         )
     )
-    lidar_processor: LidarProcessor = field(default_factory=LidarProcessor)
     tracker: MultiObjectTracker = field(default_factory=MultiObjectTracker)
-    imu_fusion: IMUFusion = field(default_factory=IMUFusion)
     sensor_fusion: SensorFusion = field(default_factory=SensorFusion)
     feature_extractor: EntityFeatureExtractor = field(default_factory=EntityFeatureExtractor)
 
@@ -42,9 +38,6 @@ class PerceptionPipeline:
         self,
         frame_bgr: np.ndarray,
         depth_map_m: np.ndarray,
-        lidar_scan: np.ndarray,
-        imu_accel_xyz_mps2: np.ndarray,
-        imu_quat_xyzw: np.ndarray,
         timestamp_us: int,
         frame_id: int | None = None,
     ) -> tuple[list[object], dict[str, float]]:
@@ -59,19 +52,11 @@ class PerceptionPipeline:
         timings["depth_ms"] = (perf_counter() - start) * 1000.0
 
         start = perf_counter()
-        lidar_clusters = self.lidar_processor.cluster_scan(lidar_scan)
-        timings["lidar_ms"] = (perf_counter() - start) * 1000.0
-
-        start = perf_counter()
         tracks = self.tracker.update(detections, depth_boxes, delta_time_s=0.1)
         timings["tracker_ms"] = (perf_counter() - start) * 1000.0
 
         start = perf_counter()
-        ego_motion = self.imu_fusion.update(imu_accel_xyz_mps2, imu_quat_xyzw, timestamp_us=timestamp_us)
-        timings["imu_ms"] = (perf_counter() - start) * 1000.0
-
-        start = perf_counter()
-        fused = self.sensor_fusion.fuse(tracks, ego_motion, lidar_clusters)
+        fused = self.sensor_fusion.fuse(tracks)
         timings["fusion_ms"] = (perf_counter() - start) * 1000.0
 
         start = perf_counter()

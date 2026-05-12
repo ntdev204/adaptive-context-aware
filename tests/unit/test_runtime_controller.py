@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import numpy as np
-
 from src.runtime.controller import AdaptiveRuntimeController, RuntimeConfig
-from src.transport.messages import ImuSampleMessage, LidarScanMessage
 
 
-def test_runtime_status_requires_engine_camera_lidar_and_imu(tmp_path) -> None:
+def test_runtime_status_requires_engine_and_camera(tmp_path) -> None:
     engine_path = tmp_path / "yolov8s.engine"
     rgb_device = tmp_path / "astras-rgb"
     depth_device = tmp_path / "astras-depth"
@@ -22,23 +19,6 @@ def test_runtime_status_requires_engine_camera_lidar_and_imu(tmp_path) -> None:
             engine_path=str(engine_path),
             camera_rgb_device=str(rgb_device),
             camera_depth_device=str(depth_device),
-        )
-    )
-    controller.sensor_store.update(
-        LidarScanMessage(
-            source_id="pi-101",
-            sequence=1,
-            timestamp_us=100,
-            scan_points=np.array([[0.0, 1.0], [0.1, 1.1]], dtype=np.float32),
-        )
-    )
-    controller.sensor_store.update(
-        ImuSampleMessage(
-            source_id="pi-101",
-            sequence=2,
-            timestamp_us=101,
-            accel_xyz_mps2=np.array([0.0, 0.0, 9.8], dtype=np.float32),
-            quat_xyzw=np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32),
         )
     )
 

@@ -38,7 +38,7 @@ def decide_degradation(
             max_speed_scale=0.5,
             target_fps=15,
             active_pathways=(ReasoningPathway.GRU,),
-            mode="lidar_only",
+            mode="depth_only",
         )
     if gpu_temp_c is not None and gpu_temp_c > 80.0:
         return DegradationDecision(

@@ -1,15 +1,11 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable
 from dataclasses import dataclass
-from time import monotonic
 
-import zmq
+from src.transport.messages import PiStatusMessage, SensorMessage, SensorMessageCodec
 
-from .messages import SensorMessage, SensorMessageCodec
-
-SensorHandler = Callable[[SensorMessage], None]
+SensorHandler = None  # kept for type-alias compatibility
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,8 +29,17 @@ class SensorIngestStats:
     last_message_age_ms: float | None
 
 
+from collections.abc import Callable
+from time import monotonic
+
+import zmq
+
+
+SensorHandler = Callable[[SensorMessage], None]
+
+
 class ZmqSensorIngest:
-    """Adaptive runtime PULL endpoint for LiDAR/IMU packets pushed by Raspberry Pi."""
+    """Adaptive runtime PULL endpoint for Pi status packets pushed by Raspberry Pi."""
 
     def __init__(
         self,

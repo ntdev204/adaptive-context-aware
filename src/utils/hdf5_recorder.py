@@ -29,13 +29,6 @@ class HDF5Recorder:
         rgb_timestamps: np.ndarray,
         depth_frames: np.ndarray,
         depth_timestamps: np.ndarray,
-        lidar_scans: np.ndarray,
-        lidar_num_points: np.ndarray,
-        lidar_timestamps: np.ndarray,
-        imu_accel: np.ndarray,
-        imu_gyro: np.ndarray,
-        imu_quat: np.ndarray,
-        imu_timestamps: np.ndarray,
         frame_annotations: list[dict[str, Any]] | None = None,
         scene_annotations: list[dict[str, Any]] | None = None,
     ) -> None:
@@ -67,17 +60,6 @@ class HDF5Recorder:
                 compression_opts=4,
             )
             depth.create_dataset("timestamps", data=depth_timestamps)
-
-            lidar = handle.create_group("lidar_scans")
-            lidar.create_dataset("data", data=lidar_scans, chunks=(min(100, len(lidar_scans)), lidar_scans.shape[1], 2))
-            lidar.create_dataset("num_points", data=lidar_num_points)
-            lidar.create_dataset("timestamps", data=lidar_timestamps)
-
-            imu = handle.create_group("imu")
-            imu.create_dataset("accel", data=imu_accel, chunks=(min(1000, len(imu_accel)), 3))
-            imu.create_dataset("gyro", data=imu_gyro, chunks=(min(1000, len(imu_gyro)), 3))
-            imu.create_dataset("quat", data=imu_quat, chunks=(min(1000, len(imu_quat)), 4))
-            imu.create_dataset("timestamps", data=imu_timestamps)
 
             if frame_annotations is not None or scene_annotations is not None:
                 annotations = handle.create_group("annotations")

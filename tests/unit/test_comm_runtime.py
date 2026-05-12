@@ -16,8 +16,7 @@ from src.comm.health_monitor import (
     SoHTelemetryReceiverDaemon,
     SoHTelemetrySender,
 )
-from src.comm.lidar_receiver import LidarReceiverDaemon
-from src.comm.protocol import MsgType, encode_packet, pack_lidar_scan, read_packet, unpack_nav_cmd
+from src.comm.protocol import MsgType, read_packet, unpack_nav_cmd
 from src.utils.enums import EStopReason, EStopSource, SafetyState, StatusChangeReason
 
 
@@ -31,36 +30,6 @@ def _wait_for_event(event: threading.Event, timeout_s: float = 2.0) -> None:
     if not event.wait(timeout_s):
         raise TimeoutError("server did not become ready")
 
-
-def test_lidar_server_receives_scan() -> None:
-    port = _free_port()
-    result: Queue[dict[str, object]] = Queue()
-    ready = threading.Event()
-
-    def server() -> None:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.bind(("127.0.0.1", port))
-            sock.listen(1)
-            ready.set()
-            conn, _ = sock.accept()
-            with conn:
-                packet = read_packet(conn.makefile("rb"))
-                result.put({"num_points": 2, "points": [(0.0, 1.0), (1.0, 2.0)]} if packet else {})
-
-    thread = threading.Thread(target=server, daemon=True)
-    thread.start()
-    _wait_for_event(ready)
-
-    points = [(0.0, 1.0), (1.0, 2.0)]
-    packet = encode_packet(MsgType.LIDAR_SCAN, seq=1, payload=pack_lidar_scan(points))
-    with socket.create_connection(("127.0.0.1", port), timeout=2.0) as client:
-        client.sendall(packet)
-
-    thread.join(timeout=2.0)
-    received = result.get_nowait()
-    assert received["num_points"] == 2
-    assert received["points"][0] == pytest.approx((0.0, 1.0))
 
 
 def test_nav_command_client_sends_packet() -> None:
@@ -117,7 +86,7 @@ def test_soh_udp_sender_receiver() -> None:
         ram_used_mb=256.0,
         battery_v=24.0,
         motor_current_a=2.0,
-        lidar_ok=1,
+        camera_ok=1,
         motor_ok=1,
         uptime_s=42,
     )
@@ -163,22 +132,9 @@ def test_heartbeat_tcp_client_server() -> None:
     assert received["pipeline_fps"] == pytest.approx(20.5)
 
 
-def test_lidar_daemon_multiplexes_multiple_clients() -> None:
-    port = _free_port()
-    daemon = LidarReceiverDaemon(host="127.0.0.1", port=port)
-    daemon.start()
-    time.sleep(0.2)
-    try:
-        for seq in (1, 2):
-            packet = encode_packet(MsgType.LIDAR_SCAN, seq=seq, payload=pack_lidar_scan([(float(seq), float(seq + 1))]))
-            with socket.create_connection(("127.0.0.1", port), timeout=2.0) as client:
-                client.sendall(packet)
-        first = daemon.messages.get(timeout=2.0)
-        second = daemon.messages.get(timeout=2.0)
-        assert first["num_points"] == 1
-        assert second["num_points"] == 1
-    finally:
-        daemon.stop()
+def test_lidar_daemon_multiplexes_multiple_clients_removed() -> None:
+    """LiDAR receiver removed — this test is intentionally skipped."""
+    pass
 
 
 def test_nav_command_daemon_reconnects_and_delivers() -> None:
@@ -212,7 +168,7 @@ def test_soh_daemon_streams_periodically() -> None:
             "ram_used_mb": 128.0,
             "battery_v": 24.0,
             "motor_current_a": 1.0,
-            "lidar_ok": 1,
+            "camera_ok": 1,
             "motor_ok": 1,
             "uptime_s": 7,
         },

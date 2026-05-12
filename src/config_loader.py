@@ -11,7 +11,6 @@ class NetworkConfig(BaseModel):
     adaptive_host: str
     jetson_host: str | None = None
     pi_host: str
-    lidar_port: int = Field(ge=1, le=65535)
     nav_port: int = Field(ge=1, le=65535)
     soh_port: int = Field(ge=1, le=65535)
     heartbeat_port: int = Field(ge=1, le=65535)

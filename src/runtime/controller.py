@@ -103,7 +103,6 @@ class AdaptiveRuntimeController:
         return self.status()
 
     def status(self) -> RuntimeStatus:
-        snapshot = self.sensor_store.snapshot()
         ingest_stats = self._ingest.stats()
         reason = self._reason
         engine_available = Path(self.config.engine_path).exists()
@@ -112,24 +111,12 @@ class AdaptiveRuntimeController:
             self._state is RuntimeState.RUNNING
             and engine_available
             and camera_available
-            and snapshot.has_lidar
-            and snapshot.has_imu
         )
         if self._state is RuntimeState.RUNNING:
             if not engine_available:
                 reason = "waiting for inference engine"
             elif not camera_available:
                 reason = "waiting for AstraS RGB-D camera devices"
-            elif not snapshot.has_lidar:
-                reason = "waiting for lidar stream from raspberry pi"
-            elif not snapshot.has_imu:
-                reason = "waiting for imu stream from raspberry pi"
-            elif _is_stale(snapshot.last_lidar_age_ms, self.config.max_sensor_age_ms):
-                ready = False
-                reason = "lidar stream is stale"
-            elif _is_stale(snapshot.last_imu_age_ms, self.config.max_sensor_age_ms):
-                ready = False
-                reason = "imu stream is stale"
             else:
                 reason = None
         return RuntimeStatus(

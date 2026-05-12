@@ -23,7 +23,7 @@ class ZmqSensorClientConfig:
 
 
 class ZmqSensorClient:
-    """Raspberry Pi-side PUSH client for LiDAR/IMU packets."""
+    """Raspberry Pi-side PUSH client for sensor status packets."""
 
     def __init__(self, config: ZmqSensorClientConfig, context: zmq.Context | None = None) -> None:
         self.config = config
