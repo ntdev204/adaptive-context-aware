@@ -1,0 +1,29 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    APP_HOME=/app \
+    CTX_ASTRAS_RGB_DEVICE=/dev/video0 \
+    CTX_ASTRAS_DEPTH_DEVICE=/dev/video1 \
+    CTX_JETSON_HOST=127.0.0.1 \
+    CTX_PI_HOST=127.0.0.2 \
+    CTX_RESULT_PUBLISH_PORT=5556 \
+    CTX_SENSOR_INGEST_PORT=5555
+
+WORKDIR ${APP_HOME}
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml ./
+COPY src ./src
+COPY config ./config
+COPY scripts ./scripts
+COPY tests ./tests
+
+RUN pip install --no-cache-dir -e .[dev] && \
+    pip install --no-cache-dir ruff
+
+CMD ["python", "-m", "pytest", "tests/unit", "-q"]

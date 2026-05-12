@@ -37,7 +37,7 @@ Phase 0.5 (Data Foundation) complete — schema, HDF5 format, and fixtures alrea
   - Input/output shapes match `data-schema.md` §5
   → Verify: Train 1 epoch mỗi model, loss decreases
 
-- [ ] **T7.3**: Model registry — versioning ONNX models
+- [ ] **T7.3**: Model registry — versioning TensorRT `.engine` models
   - Git LFS hoặc DVC cho model files
   - Metadata: accuracy, latency, date, config
   → Verify: Push + pull model versions

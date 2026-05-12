@@ -1,0 +1,36 @@
+{
+  "captured_on": "bootstrap",
+  "captured_at": "2026-05-10T11:47:18.600660+00:00",
+  "ci_runner": "bootstrap",
+  "capture_note": "baselines MUST be captured on CI runner (same hardware class), not Jetson",
+  "models": {
+    "yolo11s": {
+      "ci_cpu_ms": 45.2,
+      "tolerance_pct": 15
+    },
+    "gru_pathway": {
+      "ci_cpu_ms": 0.8,
+      "tolerance_pct": 15
+    },
+    "tcn_pathway": {
+      "ci_cpu_ms": 1.6,
+      "tolerance_pct": 15
+    },
+    "attention_pathway": {
+      "ci_cpu_ms": 3.1,
+      "tolerance_pct": 15
+    },
+    "gnn_pathway": {
+      "ci_cpu_ms": 8.5,
+      "tolerance_pct": 15
+    },
+    "complexity_estimator": {
+      "ci_cpu_ms": 0.2,
+      "tolerance_pct": 15
+    },
+    "rl_policy": {
+      "ci_cpu_ms": 0.1,
+      "tolerance_pct": 15
+    }
+  }
+}

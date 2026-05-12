@@ -1,0 +1,73 @@
+services:
+  control-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.prod
+    environment:
+      CTX_ASTRAS_DEPTH_DEVICE: /dev/video1
+      CTX_ASTRAS_RGB_DEVICE: /dev/video0
+      CTX_RUNTIME_ROLE: control-api
+      CTX_JETSON_HOST: 25.12.4.100
+      CTX_PI_HOST: 25.12.4.101
+      CTX_SENSOR_INGEST_PORT: 5555
+      CTX_RESULT_PUBLISH_PORT: 5556
+    volumes:
+      - ctx-aware-engines:/app/models/engines
+    devices:
+      - /dev/video0:/dev/video0
+      - /dev/video1:/dev/video1
+    network_mode: host
+    command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8080"]
+
+  dev-control-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    environment:
+      CTX_ASTRAS_DEPTH_DEVICE: /dev/video1
+      CTX_ASTRAS_RGB_DEVICE: /dev/video0
+      CTX_RUNTIME_ROLE: dev-control-api
+      CTX_JETSON_HOST: 127.0.0.1
+      CTX_PI_HOST: 127.0.0.2
+      CTX_SENSOR_INGEST_PORT: 5555
+      CTX_RESULT_PUBLISH_PORT: 5556
+    volumes:
+      - ../src:/app/src
+      - ../config:/app/config
+      - ../scripts:/app/scripts
+    ports:
+      - "8080:8080"
+      - "5555:5555"
+      - "5556:5556"
+    devices:
+      - /dev/video0:/dev/video0
+      - /dev/video1:/dev/video1
+    command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8080"]
+
+  monitor:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    environment:
+      CTX_RUNTIME_ROLE: monitor
+    volumes:
+      - ../src:/app/src
+      - ../config:/app/config
+      - ../scripts:/app/scripts
+      - ../tests:/app/tests
+    command: ["python", "scripts/benchmark.py", "--device", "ci", "--compare-baseline"]
+
+  watchdog:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    environment:
+      CTX_RUNTIME_ROLE: watchdog
+    volumes:
+      - ../src:/app/src
+      - ../config:/app/config
+      - ../scripts:/app/scripts
+    command: ["python", "-m", "src.main"]
+
+volumes:
+  ctx-aware-engines:

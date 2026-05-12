@@ -1,0 +1,65 @@
+{
+  "captured_on": "bootstrap",
+  "captured_at": "2026-05-10T11:47:18.602122+00:00",
+  "staleness_warning_days": 30,
+  "staleness_failure_days": 90,
+  "synthetic": true,
+  "output_reference_meta": {
+    "yolo11s": {
+      "shape": [
+        5,
+        6
+      ],
+      "dtype": "float32",
+      "checksum": 0.0
+    },
+    "gru": {
+      "shape": [
+        2,
+        64
+      ],
+      "dtype": "float32",
+      "checksum": 0.0
+    },
+    "tcn": {
+      "shape": [
+        2,
+        64
+      ],
+      "dtype": "float32",
+      "checksum": 0.0
+    },
+    "attention": {
+      "shape": [
+        2,
+        128
+      ],
+      "dtype": "float32",
+      "checksum": 0.0
+    },
+    "gnn": {
+      "shape": [
+        2,
+        256
+      ],
+      "dtype": "float32",
+      "checksum": 0.0
+    },
+    "estimator": {
+      "shape": [
+        1,
+        4
+      ],
+      "dtype": "float32",
+      "checksum": 0.0
+    },
+    "rl_policy": {
+      "shape": [
+        1,
+        4
+      ],
+      "dtype": "float32",
+      "checksum": 0.0
+    }
+  }
+}

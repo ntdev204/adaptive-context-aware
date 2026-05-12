@@ -181,10 +181,11 @@ session_YYYYMMDD_HHMMSS.h5
 
 | Model | Input Shape | Input Dtype | Output Shape | Output Dtype | Latency Target |
 |-------|-------------|-------------|--------------|-------------|----------------|
-| YOLOv8-s | `[1, 3, 480, 640]` | float32 | `[N, 6]` (x,y,w,h,conf,cls) | float32 | <8ms |
+| YOLOv11-s | `[1, 3, 480, 640]` | float32 | `[N, 6]` (x,y,w,h,conf,cls) | float32 | <8ms |
 | BoT-SORT | detections + depth | mixed | `[M, 5]` (x,y,w,h,track_id) | float32/int | <3ms |
 | Complexity Estimator | `[1, 36]` | float32 | `[1, 4]` (logits) | float32 | <1ms |
 | GRU Pathway | `[B, T, 128]` | float32 | `[B, 64]` | float32 | <2ms |
+| TCN Pathway | `[B, 128, T]` | float32 | `[B, 64]` | float32 | <3ms |
 | Attention Pathway | `[B, N, 128]` | float32 | `[B, 128]` | float32 | <8ms |
 | GNN Pathway | `[B, N, 128]` + adj `[N, N]` | float32 | `[B, 256]` | float32 | <15ms |
 | Intent Predictor | `[B, D]` | float32 | 3 heads (direction, activity, traj) | float32 | <3ms |
@@ -228,22 +229,22 @@ rl_state = [
 
 | Purpose | Source | Size | Location | Strategy |
 |---------|--------|------|----------|----------|
-| Detection smoke test | COCO person subset | 100 images | `tests/fixtures/coco_person_100/` | **Download** (gitignored) |
-| Tracking sanity | MOT17-02, MOT17-09 | 2 short clips | `tests/fixtures/mot17_subset/` | **Download** (gitignored) |
+| Detection smoke test | CCTV person subset | 20 images | `tests/fixtures/cctv_person_subset/` | **Extract locally** (gitignored) |
+| Tracking sanity | MOT20 subset | 2 short clips | `tests/fixtures/mot20_subset/` | **Extract locally** (gitignored) |
 | Quick image tests | Resized person images | 5 × 320×240 | `tests/fixtures/images/` | **Committed** (<1MB) |
 | Anomaly test cases | Synthetic (hand-crafted) | 20 cases (JSON) | `tests/fixtures/anomaly_synthetic/` | **Committed** (<100KB) |
 | RL routing scenarios | Synthetic (5 fixed scenarios) | 5 episodes (JSON) | `tests/fixtures/rl_scenarios/` | **Committed** (<50KB) |
 | Sample HDF5 | Synthetic recording | 5s, all sensors | `tests/fixtures/sample_recording.h5` | **Generated** by script (~2MB) |
 | Annotation samples | Hand-annotated | 5 frames (JSON) | `tests/fixtures/annotations/` | **Committed** (<10KB) |
 
-> **Repo hygiene:** Only tiny fixtures (<10MB total) are committed. COCO and MOT17 are downloaded on demand via `scripts/download_fixtures.py` and gitignored.
+> **Repo hygiene:** Only tiny fixtures (<10MB total) are committed. Larger bootstrap subsets are extracted locally from `data/fine_tuning/` via `scripts/download_fixtures.py` and gitignored.
 
 ### Upgrade Path
 
 | Bootstrap → Production | Trigger |
 |------------------------|---------|
-| COCO → Custom robot data | Phase 0.5/7: >500 annotated frames collected |
-| MOT17 → Custom robot clips | Phase 7: >10 sequences recorded |
+| CCTV subset → Custom robot data | Phase 0.5/7: >500 annotated frames collected |
+| MOT20 subset → Custom robot clips | Phase 7: >10 sequences recorded |
 | Synthetic anomaly → UBnormal (optional) + robot data | Phase 7: robot anomaly clips available |
 | Fixed RL scenarios → Environment traces | Phase 4: RL environment operational |
 

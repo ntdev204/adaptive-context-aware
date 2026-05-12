@@ -26,17 +26,16 @@ Phase -1 (Specifications) complete — all 4 spec documents finalized.
 - [ ] **T0.2**: Tạo config files (`dev.yaml`, `test.yaml`, `prod.yaml`) với schema validation
   → Verify: `python -c "from config import load_config; load_config('dev')"`
 
-- [ ] **T0.3**: Tạo `Dockerfile.dev` (NVIDIA base, hot-reload, ONNX Runtime)
+- [ ] **T0.3**: Tạo `Dockerfile.dev` (NVIDIA base, hot-reload, TensorRT engine contract)
   → Verify: `docker build -f docker/Dockerfile.dev -t ctx-aware:dev .` thành công
 
 - [ ] **T0.4**: Tạo `Dockerfile.test` (CI-optimized, pytest, ruff)
   → Verify: `docker build -f docker/Dockerfile.test -t ctx-aware:test .`
 
 - [ ] **T0.5**: Tạo `Dockerfile.prod` (minimal, multi-stage build)
-  - Image ships **ONNX models only** (not `.engine`)
-  - TensorRT runtime included for on-device `.engine` build
+  - Image/model volume uses **TensorRT `.engine` artifacts only**
+  - TensorRT runtime included for on-device `.engine` load/build validation
   - Volume mount for engine cache: `ctx-aware-engines:/app/models/engines`
-  - ONNX Runtime included as fallback
   → Verify: `docker build -f docker/Dockerfile.prod -t ctx-aware:prod .`
 
 - [ ] **T0.6**: Tạo `docker-compose.yml` với services: ai-pipeline, comm-layer, monitor, watchdog
@@ -64,12 +63,12 @@ Phase -1 (Specifications) complete — all 4 spec documents finalized.
   - `security.yml`: Trivy container scan + dependency audit
   → Verify: CI passes trên GitHub
 
-- [ ] **T0.10**: Tạo `entrypoint.sh` — auto build `.engine` from ONNX
+- [ ] **T0.10**: Tạo `entrypoint.sh` — validate TensorRT `.engine` artifacts
   - Check Docker volume for existing `.engine` files
-  - Compare ONNX hash (sha256) — skip build if match
-  - If `trtexec` fails → log WARNING, fallback to ONNX Runtime
+  - Compare engine metadata/hash (sha256) — skip rebuild if match
+  - If engine build/load fails → log ERROR and enter documented degraded/safe mode
   - Script runs idempotent
-  → Verify: First run builds `.engine`. Second run skips. Delete `.engine` + fail `trtexec` → ONNX fallback works
+  → Verify: First run validates/builds `.engine`. Second run skips. Delete `.engine` + fail build/load → service does not silently run CPU fallback
 
 ## Done When
 
@@ -78,4 +77,4 @@ Phase -1 (Specifications) complete — all 4 spec documents finalized.
 - [ ] RPi mock client gửi LiDAR data → Jetson nhận được
 - [ ] Packet format matches `communication-protocol.md` §2 exactly
 - [ ] Engine cache volume works across container restarts
-- [ ] ONNX Runtime fallback tested
+- [ ] Engine-only degraded/safe failure path tested

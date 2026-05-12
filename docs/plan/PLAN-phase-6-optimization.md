@@ -15,11 +15,11 @@ Tối ưu toàn bộ pipeline cho production trên Jetson: INT8 quantization, me
 
 ## Tasks
 
-- [ ] **T6.1**: Export tất cả models → ONNX (YOLOv8-s, GRU, Attention, GNN, RL policy)
-  → Verify: ONNX models produce same output (tolerance <1e-3 vs PyTorch)
+- [ ] **T6.1**: Build tất cả models → TensorRT `.engine` (YOLOv11-s, GRU, TCN, Attention, GNN, RL policy)
+  → Verify: TensorRT engines produce expected output shapes and values within tolerance vs PyTorch checkpoints
 
-- [ ] **T6.2**: TensorRT FP16 conversion — tất cả models
-  → Verify: Inference results match ONNX (tolerance <1e-2)
+- [ ] **T6.2**: TensorRT FP16 engine validation — tất cả models
+  → Verify: Inference results match PyTorch reference (tolerance <1e-2)
 
 - [ ] **T6.3**: TensorRT INT8 calibration — tạo calibration dataset, quantize
   → Verify: Accuracy drop <2% so với FP16 (per `benchmarking.md` §4)
@@ -35,7 +35,7 @@ Tối ưu toàn bộ pipeline cho production trên Jetson: INT8 quantization, me
 
 - [ ] **T6.7**: Benchmark script (`scripts/benchmark.py`) — **two modes**
   - `--device ci`: CPU-only regression checks against stored baselines
-    - ONNX output shape/value parity
+    - Engine contract output shape/value parity using stored references
     - CPU latency vs baseline (fail if >15% slower)
     - Peak RSS vs baseline (fail if >10% higher)
   - `--device jetson`: full hardware benchmark (1000 frames)
@@ -48,9 +48,9 @@ Tối ưu toàn bộ pipeline cho production trên Jetson: INT8 quantization, me
 - [ ] **T6.8**: `.engine` build automation — `scripts/build_engines.sh`
   - Build all `.engine` files trên Jetson trong 1 command
   - Engine cache in Docker volume (`ctx-aware-engines`)
-  - ONNX Runtime fallback if `trtexec` fails
-  - Idempotent: skip build if valid `.engine` exists and ONNX hash matches
-  → Verify: Build all engines. Restart → engines loaded from cache. Simulate TRT failure → ONNX fallback works
+  - No CPU inference fallback if TensorRT build/load fails
+  - Idempotent: skip build if valid `.engine` exists and engine metadata hash matches
+  → Verify: Build all engines. Restart → engines loaded from cache. Simulate TRT failure → service enters documented degraded/safe mode
 
 - [ ] **T6.9**: CI baseline management — `scripts/update_ci_baselines.py`
   - Run Jetson benchmark → export results → update `tests/benchmark/baselines/*.json`
@@ -65,5 +65,5 @@ Tối ưu toàn bộ pipeline cho production trên Jetson: INT8 quantization, me
 - [ ] INT8 accuracy drop <2%
 - [ ] CI benchmark passes: `python scripts/benchmark.py --device ci --compare-baseline` exit 0
 - [ ] Jetson benchmark passes: `python scripts/benchmark.py --device jetson --frames 1000` all metrics green
-- [ ] Engine cache + ONNX fallback working
+- [ ] Engine cache + engine-only degraded/safe failure path working
 - [ ] CI baselines up-to-date and schema-valid

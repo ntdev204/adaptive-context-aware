@@ -21,8 +21,8 @@
 
 | Metric | Method | Pass/Fail |
 |--------|--------|-----------|
-| ONNX output shape parity | Load each model, run dummy input, check output shape | Shape matches `data-schema.md` §5 |
-| ONNX output value parity | Compare outputs vs stored reference (tolerance 1e-3) | Max abs diff < 1e-3 |
+| TensorRT engine output shape parity | Load each model contract, run dummy input, check output shape | Shape matches `data-schema.md` §5 |
+| TensorRT engine output value parity | Compare outputs vs stored reference (tolerance 1e-3 in CI, 1e-2 on Jetson FP16) | Max abs diff within tier tolerance |
 | CPU relative latency | Run 100 inferences per model on CI CPU, compare vs stored baseline | Fail if >15% slower |
 | Peak RSS | Measure peak RSS during full pipeline run (1000 frames synthetic) | Fail if >10% higher than baseline |
 | Protocol/schema tests | Run `pytest tests/unit/test_protocol.py tests/unit/test_data_schema.py` | All pass |
@@ -35,8 +35,9 @@ tests/benchmark/baselines/
 ├── latency_baseline.json      # per-model CPU latency reference
 ├── memory_baseline.json       # peak RSS reference
 ├── output_reference/          # stored model outputs for parity check
-│   ├── yolov8s_ref.npy
+│   ├── yolo11s_ref.npy
 │   ├── gru_ref.npy
+│   ├── tcn_ref.npy
 │   ├── attention_ref.npy
 │   ├── gnn_ref.npy
 │   ├── estimator_ref.npy
@@ -53,8 +54,9 @@ tests/benchmark/baselines/
   "ci_runner": "ubuntu-24.04",
   "capture_note": "baselines MUST be captured on CI runner (same hardware class), not Jetson",
   "models": {
-    "yolov8s": {"ci_cpu_ms": 45.2, "tolerance_pct": 15},
+    "yolo11s": {"ci_cpu_ms": 45.2, "tolerance_pct": 15},
     "gru_pathway": {"ci_cpu_ms": 0.8, "tolerance_pct": 15},
+    "tcn_pathway": {"ci_cpu_ms": 1.2, "tolerance_pct": 15},
     "attention_pathway": {"ci_cpu_ms": 3.1, "tolerance_pct": 15},
     "gnn_pathway": {"ci_cpu_ms": 8.5, "tolerance_pct": 15},
     "complexity_estimator": {"ci_cpu_ms": 0.2, "tolerance_pct": 15},
@@ -118,7 +120,7 @@ measure_frames = 1000
 
 modules = ["detector", "tracker", "depth_proc", "lidar_proc",
            "imu_fusion", "sensor_fusion", "estimator", "router",
-           "pathway", "fusion", "decision"]
+           "gru", "tcn", "attention", "gnn", "fusion", "decision"]
 ```
 
 #### GPU RAM Measurement
@@ -145,7 +147,7 @@ python scripts/benchmark.py --device jetson --frames 1000
 
 ## 4. Bootstrap Threshold Table
 
-### Detection (YOLOv8-s)
+### Detection (YOLOv11-s)
 
 | Metric | Bootstrap Target | Dataset | Upgrade When |
 |--------|-----------------|---------|--------------|
@@ -209,7 +211,7 @@ python scripts/update_ci_baselines.py --source ci-runner --output tests/benchmar
 
 | Trigger | Action |
 |---------|--------|
-| New model version pushed | Re-run baseline capture on Jetson |
+| New model version pushed | Re-run baseline capture on CI runner; validate `.engine` on Jetson |
 | Major dependency update | Re-run baseline capture |
 | New release tag | Mandatory baseline refresh |
 | CI false positives (>3 in a row) | Investigate, then refresh if legitimate |
@@ -242,8 +244,9 @@ python scripts/update_ci_baselines.py --source ci-runner --output tests/benchmar
     "tracker": {"latency_ms": {"p50": 2.8, "p95": 3.1}}
   },
   "models": {
-    "yolov8s": {"format": "TRT_FP16", "size_mb": 14},
-    "gru": {"format": "TRT_FP16", "size_mb": 0.5}
+    "yolo11s": {"format": "TRT_FP16", "size_mb": 14},
+    "gru": {"format": "TRT_FP16", "size_mb": 0.15},
+    "tcn": {"format": "TRT_FP16", "size_mb": 0.23}
   },
   "pass": true,
   "failures": []

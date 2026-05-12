@@ -27,6 +27,7 @@ models/**/*.log
 logs/
 *.h5
 *.hdf5
+!tests/fixtures/sample_recording.h5
 
 # ── IDE ─────────────────────────────────────────────────────────────
 .vscode/
@@ -41,16 +42,10 @@ src/communication/proto/*_pb2*.py
 # ── Env / secrets (contains IP, SSH key paths — never commit) ─────────
 env/sync.env
 
-# ── Research data (raw runs — large, machine-specific) ────────────────
-# Ignore raw per-run folders (config, env, metrics, artifacts)
-data/research_data/*/
-# But DO track the generated aggregate CSVs and README index
-!data/research_data/aggregated/
-!data/research_data/README.md
-
 # ── Agents ────────────────────────────────────────────────────────────
 .agent/
 
 # ── Dataset ───────────────────────────────────────────────────────────
-data/intent_dataset/
-data/roi_dataset/
+tests/fixtures/cctv_person_subset/
+tests/fixtures/mot20_subset/
+data/

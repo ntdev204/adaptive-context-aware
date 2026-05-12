@@ -1,0 +1,21 @@
+{
+  "frame_id": 4,
+  "timestamp": 1715000000400000,
+  "persons": [
+    {
+      "bbox": [205, 110, 54, 130],
+      "track_id": 4,
+      "activity": "INTERACTING",
+      "intent_direction": "NW",
+      "trajectory_pred": [[198, 106], [192, 100]],
+      "is_anomaly": false,
+      "confidence": 0.87
+    }
+  ],
+  "scene": {
+    "context": "GATE_AREA",
+    "crowd_density": 0.35,
+    "motion_entropy": 0.31,
+    "anomaly_flag": false
+  }
+}

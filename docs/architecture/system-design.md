@@ -16,7 +16,7 @@
 │  │ • LiDAR drv  │           │ • RGB-D Camera         │ │
 │  │ • Motor ctrl │           │ • IMU                  │ │
 │  │ • Mecanum    │           │ • AI Pipeline (Docker) │ │
-│  │ • E-Stop     │           │ • TensorRT / ONNX      │ │
+│  │ • E-Stop     │           │ • TensorRT .engine     │ │
 │  └──────────────┘           └────────────────────────┘ │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -129,7 +129,7 @@ soh_budget = weighted_mean(soh_factors)  # 0.0 = critical, 1.0 = healthy
 
 | Component | Model | Format | Size | Latency | Input |
 |-----------|-------|--------|------|---------|-------|
-| Detection | YOLOv8-s | TensorRT FP16 | ~14MB | ~8ms | RGB 640×480 |
+| Detection | YOLOv11-s | TensorRT FP16 | ~14MB | ~8ms | RGB 640×480 |
 | Tracking | BoT-SORT | C++/Python | ~2MB | ~3ms | Detections + depth |
 | Depth Proc | Custom | CUDA kernel | <1MB | ~2ms | Depth map 640×480 |
 | LiDAR Proc | Custom | NumPy/CUDA | <1MB | ~2ms | 2D scan points |
@@ -178,7 +178,7 @@ reward = (
 
 ### Training Strategy
 - **Algorithm:** PPO (Proximal Policy Optimization)
-- **Training:** Offline on desktop GPU → export ONNX → TensorRT on Jetson
+- **Training:** Offline on desktop GPU → build TensorRT `.engine` artifacts on Jetson
 - **Online adaptation:** Lightweight policy update on Jetson (optional)
 
 ---
@@ -223,9 +223,9 @@ reward = (
 
 | Env | Purpose | Inference Engine | Logging | Safety |
 |-----|---------|-----------------|---------|--------|
-| **dev** | Local development, hot-reload | ONNX Runtime (CPU/GPU) | DEBUG | Disabled |
-| **test** | CI/CD, benchmark, integration | ONNX Runtime (CI) / TensorRT FP16 (Jetson) | INFO | Simulated |
-| **prod** | Robot deployment | TensorRT INT8 (fallback: ONNX Runtime) | WARNING | Full E-Stop + FSM |
+| **dev** | Local development, hot-reload | TensorRT `.engine` contract with mocked local runtimes | DEBUG | Disabled |
+| **test** | CI/CD, benchmark, integration | TensorRT `.engine` shape/contract tests; Jetson FP16 validation | INFO | Simulated |
+| **prod** | Robot deployment | TensorRT FP16/INT8 `.engine` only | WARNING | Full E-Stop + FSM |
 
 ---
 
@@ -247,11 +247,11 @@ reward = (
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Inter-device comm | Raw TCP/UDP | Lowest latency, no ROS overhead |
-| AI framework | TensorRT + ONNX | Best Jetson performance |
+| AI framework | TensorRT `.engine` | Best Jetson performance |
 | Container | Docker + NVIDIA runtime | Reproducibility + GPU access |
 | RL algorithm | PPO | Stable, works with discrete actions |
 | Tracking | BoT-SORT | Best accuracy/speed on Jetson |
-| Detection | YOLOv8-s | Proven, TensorRT export mature |
+| Detection | YOLOv11-s | Modern small detector for Jetson deployment |
 | Monitoring | Prometheus + custom | Lightweight, edge-compatible |
 
 ---
@@ -301,7 +301,7 @@ Robot (Jetson)                    Dev Machine
                                  ┌──────────────┐
                                  │ Training      │
                                  │ • Desktop GPU │
-                                 │ • Export ONNX │
+                                 │ • Build .engine │
                                  └──────┬───────┘
                                         │
                                         ▼
@@ -323,8 +323,8 @@ Robot (Jetson)                    Dev Machine
 ```
 
 > **Note:** `.engine` files MUST be built ON the Jetson (architecture-specific).
-> Docker image ships ONNX models only. `entrypoint.sh` runs `trtexec` on first boot.
-> Built engines cached in Docker volume (`ctx-aware-engines`). If TRT build fails → fallback to ONNX Runtime.
+> Docker image and model volume use TensorRT `.engine` artifacts only.
+> Built engines are cached in Docker volume (`ctx-aware-engines`). If engine build/load fails, runtime stops or enters degraded mode; there is no CPU inference fallback.
 
 ---
 
