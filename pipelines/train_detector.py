@@ -35,6 +35,9 @@ class DetectorTrainingPlan:
     merged_dataset_yaml: Path
 
 
+DEFAULT_DETECTOR_TRAINING_CONFIG = DetectorTrainingConfig()
+
+
 def load_yolo_dataset_config(path: str | Path) -> dict[str, object]:
     config_path = Path(path)
     return yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -139,7 +142,7 @@ def build_merged_dataset(dataset_yamls: list[Path], output_root: str | Path) -> 
     return merged_yaml
 
 
-def plan_detector_training(config: DetectorTrainingConfig = DetectorTrainingConfig()) -> DetectorTrainingPlan:
+def plan_detector_training(config: DetectorTrainingConfig = DEFAULT_DETECTOR_TRAINING_CONFIG) -> DetectorTrainingPlan:
     merged_dataset_yaml = build_merged_dataset(
         [dataset_dir / "data.yaml" for dataset_dir in config.custom_datasets],
         config.work_dir / "merged_custom_dataset",
@@ -153,7 +156,7 @@ def plan_detector_training(config: DetectorTrainingConfig = DetectorTrainingConf
     )
 
 
-def train_detector(config: DetectorTrainingConfig = DetectorTrainingConfig()) -> DetectorTrainingPlan:
+def train_detector(config: DetectorTrainingConfig = DEFAULT_DETECTOR_TRAINING_CONFIG) -> DetectorTrainingPlan:
     try:
         from ultralytics import YOLO
     except ImportError as exc:
@@ -202,23 +205,23 @@ def _filter_person_only_annotations(label_path: Path, person_class_index: int) -
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Stage YOLO11 detector training from CCTV and custom school datasets.")
-    parser.add_argument("--base-model", default=DetectorTrainingConfig.base_model)
-    parser.add_argument("--pretrain-dataset", type=Path, default=DetectorTrainingConfig.pretrain_dataset)
+    parser.add_argument("--base-model", default=DEFAULT_DETECTOR_TRAINING_CONFIG.base_model)
+    parser.add_argument("--pretrain-dataset", type=Path, default=DEFAULT_DETECTOR_TRAINING_CONFIG.pretrain_dataset)
     parser.add_argument("--custom-dataset", action="append", type=Path, dest="custom_datasets")
-    parser.add_argument("--work-dir", type=Path, default=DetectorTrainingConfig.work_dir)
-    parser.add_argument("--imgsz", type=int, default=DetectorTrainingConfig.image_size)
-    parser.add_argument("--pretrain-epochs", type=int, default=DetectorTrainingConfig.pretrain_epochs)
-    parser.add_argument("--finetune-epochs", type=int, default=DetectorTrainingConfig.finetune_epochs)
-    parser.add_argument("--batch-size", type=int, default=DetectorTrainingConfig.batch_size)
-    parser.add_argument("--device", default=DetectorTrainingConfig.device)
-    parser.add_argument("--workers", type=int, default=DetectorTrainingConfig.workers)
+    parser.add_argument("--work-dir", type=Path, default=DEFAULT_DETECTOR_TRAINING_CONFIG.work_dir)
+    parser.add_argument("--imgsz", type=int, default=DEFAULT_DETECTOR_TRAINING_CONFIG.image_size)
+    parser.add_argument("--pretrain-epochs", type=int, default=DEFAULT_DETECTOR_TRAINING_CONFIG.pretrain_epochs)
+    parser.add_argument("--finetune-epochs", type=int, default=DEFAULT_DETECTOR_TRAINING_CONFIG.finetune_epochs)
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_DETECTOR_TRAINING_CONFIG.batch_size)
+    parser.add_argument("--device", default=DEFAULT_DETECTOR_TRAINING_CONFIG.device)
+    parser.add_argument("--workers", type=int, default=DEFAULT_DETECTOR_TRAINING_CONFIG.workers)
     parser.add_argument("--plan-only", action="store_true")
     args = parser.parse_args()
 
     config = DetectorTrainingConfig(
         base_model=args.base_model,
         pretrain_dataset=args.pretrain_dataset,
-        custom_datasets=tuple(args.custom_datasets or DetectorTrainingConfig.custom_datasets),
+        custom_datasets=tuple(args.custom_datasets or DEFAULT_DETECTOR_TRAINING_CONFIG.custom_datasets),
         work_dir=args.work_dir,
         image_size=args.imgsz,
         pretrain_epochs=args.pretrain_epochs,
