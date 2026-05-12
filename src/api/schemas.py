@@ -16,6 +16,7 @@ class RuntimeConfigResponse(BaseModel):
     camera_rgb_device: str
     camera_depth_device: str
     max_sensor_age_ms: int
+    heartbeat_endpoint: str
 
 
 class RuntimeControlResponse(BaseModel):
@@ -32,6 +33,7 @@ class RuntimeMetricsResponse(BaseModel):
     camera_available: bool
     sensor_ingest_endpoint: str
     result_publish_endpoint: str
+    heartbeat_endpoint: str
     messages_received: int = Field(ge=0)
     decode_errors: int = Field(ge=0)
     last_message_age_ms: float | None = None

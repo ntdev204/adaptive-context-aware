@@ -11,6 +11,8 @@ services:
       CTX_PI_HOST: 25.12.4.101
       CTX_SENSOR_INGEST_PORT: 5555
       CTX_RESULT_PUBLISH_PORT: 5556
+      CTX_HEARTBEAT_PORT: 9093
+      CTX_HEARTBEAT_INTERVAL_MS: 500
     volumes:
       - ctx-aware-engines:/app/models/engines
     devices:
@@ -31,6 +33,8 @@ services:
       CTX_PI_HOST: 127.0.0.2
       CTX_SENSOR_INGEST_PORT: 5555
       CTX_RESULT_PUBLISH_PORT: 5556
+      CTX_HEARTBEAT_PORT: 9093
+      CTX_HEARTBEAT_INTERVAL_MS: 500
     volumes:
       - ../src:/app/src
       - ../config:/app/config
