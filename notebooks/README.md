@@ -47,6 +47,22 @@ Thu muc nay luu notebook dung tren Colab Pro cho cac pipeline training hien co t
 4. Chinh tham so trong notebook.
 5. Chay cell command goi thang `pipelines/`.
 
+## Ghi chu cho H100
+
+- `01_yolo_finetune.ipynb` da duoc set theo huong tan dung GPU manh hon:
+  - batch size lon hon
+  - image size lon hon
+  - worker nhieu hon
+  - artifact dir rieng cho H100 run
+- `02_botsort_finetune.ipynb` da duoc tang so sequence va frame budget de khong lang phi tai nguyen.
+- Neu van con du VRAM, ban co the thu tiep:
+  - tang `BATCH_SIZE`
+  - tang `IMGSZ`
+  - tang `MAX_MOT20`, `MAX_HALLWAY`, `MAX_FRAMES`
+- Neu gap OOM:
+  - ha `BATCH_SIZE`
+  - giu `WORKERS` va `IMGSZ` hop ly
+
 ## Nguyen tac
 
 - Notebook chi chua orchestration, setup, va notes.
