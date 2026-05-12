@@ -44,8 +44,21 @@ Thu muc nay luu notebook dung tren Colab Pro cho cac pipeline training hien co t
 3. Cai dependency:
    - `pip install -e .[dev]`
    - hoac `pip install -e .[engine,dev]` neu can phan detector/runtime
-4. Chinh tham so trong notebook.
-5. Chay cell command goi thang `pipelines/`.
+4. Copy du lieu tu `MyDrive/data` vao `data/` trong repo clone.
+5. Chinh tham so trong notebook.
+6. Chay cell command goi thang `pipelines/`.
+
+## Quy uoc dataset tren Colab
+
+- Nguon du lieu chuan:
+  - `MyDrive/data/...`
+- Truoc khi train, notebook se copy toan bo:
+  - `MyDrive/data`
+  - vao:
+  - `repo/data`
+- Ly do:
+  - pipeline trong repo dang doc dataset theo duong dan `data/...`
+  - khong phu thuoc truc tiep vao duong dan Google Drive trong code train
 
 ## Ghi chu cho H100
 
