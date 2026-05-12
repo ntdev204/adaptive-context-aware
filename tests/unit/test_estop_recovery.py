@@ -6,7 +6,7 @@ from src.utils.enums import EStopReason, EStopSource, SafetyState
 
 
 def test_estop_command_disables_motors() -> None:
-    command = build_estop_command(EStopReason.ANOMALY_CRITICAL, EStopSource.JETSON_AI)
+    command = build_estop_command(EStopReason.ANOMALY_CRITICAL, EStopSource.ADAPTIVE_RUNTIME)
     assert command.velocity_xyz == (0.0, 0.0, 0.0)
     assert not command.motors_enabled
     assert command.state == SafetyState.ESTOP

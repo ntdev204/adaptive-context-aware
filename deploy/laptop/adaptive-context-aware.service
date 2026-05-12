@@ -1,5 +1,5 @@
 [Unit]
-Description=Adaptive Context Aware Jetson Runtime
+Description=Adaptive Context Aware Laptop Runtime
 After=docker.service network-online.target
 Wants=network-online.target
 Requires=docker.service

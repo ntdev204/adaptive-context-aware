@@ -12,7 +12,7 @@ from src.transport.results import (
 
 def test_perception_result_roundtrip_uses_protobuf_bytes() -> None:
     message = PerceptionResultMessage(
-        source_id="jetson-100",
+        source_id="laptop-100",
         sequence=42,
         timestamp_us=123456,
         entities=[
@@ -39,7 +39,7 @@ def test_perception_result_roundtrip_uses_protobuf_bytes() -> None:
     decoded = PerceptionResultCodec.decode(raw)
 
     assert isinstance(raw, bytes)
-    assert decoded.source_id == "jetson-100"
+    assert decoded.source_id == "laptop-100"
     assert decoded.entities[0].track_id == 1
     np.testing.assert_allclose(decoded.entities[0].position_xyz_m, np.array([1.0, 2.0, 3.0], dtype=np.float32))
     assert decoded.metrics.fps == 30.0

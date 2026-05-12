@@ -157,7 +157,7 @@ def torch_tensorrt_engine_builder(spec: BrainEngineSpec, *, fp16: bool = True) -
     try:
         import torch_tensorrt
     except ImportError as exc:
-        raise RuntimeError("torch-tensorrt is required to build Phase 2 .engine files on Jetson") from exc
+        raise RuntimeError("torch-tensorrt is required to build Phase 2 .engine files on the target runtime") from exc
 
     compile_kwargs = {
         "inputs": [tuple(tensor.shape) for tensor in spec.inputs],
@@ -183,7 +183,7 @@ def _write_engine_metadata(spec: BrainEngineSpec, *, fp16: bool) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build Phase 2 TensorRT .engine files on Jetson.")
+    parser = argparse.ArgumentParser(description="Build Phase 2 TensorRT .engine files for the target runtime.")
     parser.add_argument("--output-dir", type=Path, default=Path("models/engines"))
     parser.add_argument("--fp32", action="store_true")
     args = parser.parse_args()

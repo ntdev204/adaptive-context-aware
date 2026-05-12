@@ -9,13 +9,17 @@ from .messages import SensorMessage, SensorMessageCodec
 
 @dataclass(frozen=True, slots=True)
 class ZmqSensorClientConfig:
-    jetson_host: str = "25.12.4.100"
-    jetson_port: int = 5555
+    adaptive_host: str = "127.0.0.1"
+    adaptive_port: int = 5555
     high_water_mark: int = 1
+    jetson_host: str | None = None
+    jetson_port: int | None = None
 
     @property
     def endpoint(self) -> str:
-        return f"tcp://{self.jetson_host}:{self.jetson_port}"
+        host = self.jetson_host or self.adaptive_host
+        port = self.jetson_port or self.adaptive_port
+        return f"tcp://{host}:{port}"
 
 
 class ZmqSensorClient:

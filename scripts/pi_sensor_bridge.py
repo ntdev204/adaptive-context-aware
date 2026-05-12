@@ -11,13 +11,16 @@ from src.transport.zmq_sensor_client import ZmqSensorClient, ZmqSensorClientConf
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Bridge real Raspberry Pi sensor JSONL into Jetson ZMQ ingest.")
-    parser.add_argument("--jetson-host", default="25.12.4.100")
+    parser = argparse.ArgumentParser(description="Bridge real Raspberry Pi sensor JSONL into adaptive runtime ZMQ ingest.")
+    parser.add_argument("--adaptive-host", default="127.0.0.1")
+    parser.add_argument("--jetson-host", dest="legacy_jetson_host", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--port", type=int, default=5555)
     parser.add_argument("--source-id", default="raspi-101")
     args = parser.parse_args()
 
-    client = ZmqSensorClient(ZmqSensorClientConfig(jetson_host=args.jetson_host, jetson_port=args.port))
+    client = ZmqSensorClient(
+        ZmqSensorClientConfig(adaptive_host=args.legacy_jetson_host or args.adaptive_host, adaptive_port=args.port)
+    )
     try:
         for line in sys.stdin:
             if not line.strip():

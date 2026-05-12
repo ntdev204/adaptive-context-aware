@@ -1,2 +1,2 @@
-"""Runtime orchestration for Jetson production services."""
+"""Runtime orchestration for adaptive laptop production services."""
 

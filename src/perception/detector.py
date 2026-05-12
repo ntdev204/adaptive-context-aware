@@ -38,7 +38,7 @@ class DetectorRuntime(Protocol):
 
 
 class PersonDetector:
-    """Engine-only detector contract for Jetson runtime."""
+    """Engine-only detector contract for the adaptive runtime."""
 
     def __init__(self, config: DetectorConfig | None = None, runtime: DetectorRuntime | None = None) -> None:
         self.config = config or DetectorConfig()

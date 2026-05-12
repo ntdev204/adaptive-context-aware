@@ -252,7 +252,7 @@ def test_heartbeat_ack_flow_and_control_messages() -> None:
         status = server.state.status_updates.get(timeout=2.0)
         assert status["new_state"] == SafetyState.DEGRADED
 
-        estop_seq = client.send_estop(EStopReason.ANOMALY_CRITICAL, EStopSource.JETSON_AI)
+        estop_seq = client.send_estop(EStopReason.ANOMALY_CRITICAL, EStopSource.ADAPTIVE_RUNTIME)
         estop = server.state.estops.get(timeout=2.0)
         assert estop["reason"] == EStopReason.ANOMALY_CRITICAL
 

@@ -34,7 +34,7 @@ class SensorIngestStats:
 
 
 class ZmqSensorIngest:
-    """Jetson-side PULL endpoint for LiDAR/IMU packets pushed by Raspberry Pi."""
+    """Adaptive runtime PULL endpoint for LiDAR/IMU packets pushed by Raspberry Pi."""
 
     def __init__(
         self,

@@ -1,5 +1,5 @@
 network:
-  jetson_host: 25.12.4.100
+  adaptive_host: 127.0.0.1
   pi_host: 25.12.4.101
   lidar_port: 9090
   nav_port: 9091

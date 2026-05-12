@@ -8,7 +8,7 @@ class HealthResponse(BaseModel):
 
 
 class RuntimeConfigResponse(BaseModel):
-    jetson_host: str
+    adaptive_host: str
     pi_host: str
     sensor_ingest_endpoint: str
     result_publish_endpoint: str

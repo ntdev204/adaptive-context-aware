@@ -22,7 +22,7 @@ class RuntimeState(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class RuntimeConfig:
-    jetson_host: str = "25.12.4.100"
+    adaptive_host: str = "127.0.0.1"
     pi_host: str = "25.12.4.101"
     sensor_ingest_port: int = 5555
     result_publish_port: int = 5556
@@ -35,6 +35,11 @@ class RuntimeConfig:
     camera_width: int = 640
     camera_height: int = 480
     camera_fps: int = 30
+    jetson_host: str | None = None
+
+    @property
+    def bind_host(self) -> str:
+        return self.jetson_host or self.adaptive_host
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +54,7 @@ class RuntimeStatus:
     heartbeat_endpoint: str
 
 
-class JetsonRuntimeController:
+class AdaptiveRuntimeController:
     def __init__(self, config: RuntimeConfig | None = None, sensor_store: SensorStore | None = None) -> None:
         self.config = config or RuntimeConfig()
         self.sensor_store = sensor_store or SensorStore()
@@ -65,11 +70,11 @@ class JetsonRuntimeController:
             )
         )
         self._ingest = ZmqSensorIngest(
-            ZmqIngestConfig(bind_host=self.config.jetson_host, bind_port=self.config.sensor_ingest_port),
+            ZmqIngestConfig(bind_host=self.config.bind_host, bind_port=self.config.sensor_ingest_port),
             handler=self.sensor_store.update,
         )
         self._result_publisher = ZmqResultPublisher(
-            ZmqResultPublisherConfig(bind_host=self.config.jetson_host, bind_port=self.config.result_publish_port)
+            ZmqResultPublisherConfig(bind_host=self.config.bind_host, bind_port=self.config.result_publish_port)
         )
         self._heartbeat_client: HeartbeatClientDaemon | None = None
 
@@ -112,7 +117,7 @@ class JetsonRuntimeController:
         )
         if self._state is RuntimeState.RUNNING:
             if not engine_available:
-                reason = "waiting for TensorRT engine"
+                reason = "waiting for inference engine"
             elif not camera_available:
                 reason = "waiting for AstraS RGB-D camera devices"
             elif not snapshot.has_lidar:
@@ -175,3 +180,6 @@ class JetsonRuntimeController:
 
 def _is_stale(age_ms: float | None, max_age_ms: int) -> bool:
     return age_ms is None or age_ms > max_age_ms
+
+
+JetsonRuntimeController = AdaptiveRuntimeController

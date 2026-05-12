@@ -61,6 +61,7 @@ class EStopReason(IntEnum):
 
 
 class EStopSource(IntEnum):
+    ADAPTIVE_RUNTIME = 0x01
     JETSON_AI = 0x01
     RPI_WATCHDOG = 0x02
     HARDWARE = 0x03

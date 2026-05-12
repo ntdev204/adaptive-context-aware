@@ -3,13 +3,13 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from src.api.app import create_app
-from src.runtime.controller import JetsonRuntimeController, RuntimeConfig
+from src.runtime.controller import AdaptiveRuntimeController, RuntimeConfig
 
 
 def _client() -> TestClient:
-    controller = JetsonRuntimeController(
+    controller = AdaptiveRuntimeController(
         RuntimeConfig(
-            jetson_host="127.0.0.1",
+            adaptive_host="127.0.0.1",
             pi_host="127.0.0.2",
             sensor_ingest_port=0,
             result_publish_port=0,
@@ -31,7 +31,7 @@ def test_control_plane_exposes_config_and_metrics() -> None:
     client = _client()
     config = client.get("/config")
     assert config.status_code == 200
-    assert config.json()["jetson_host"] == "127.0.0.1"
+    assert config.json()["adaptive_host"] == "127.0.0.1"
     assert config.json()["sensor_ingest_endpoint"] == "tcp://127.0.0.1:0"
     assert config.json()["result_publish_endpoint"] == "tcp://127.0.0.1:0"
     assert config.json()["heartbeat_endpoint"] == "tcp://127.0.0.2:9093"

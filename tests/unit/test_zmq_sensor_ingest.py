@@ -22,7 +22,7 @@ def test_zmq_sensor_ingest_receives_lidar_and_imu() -> None:
     )
     ingest.start()
     client = ZmqSensorClient(
-        ZmqSensorClientConfig(jetson_host="127.0.0.1", jetson_port=5599),
+        ZmqSensorClientConfig(adaptive_host="127.0.0.1", adaptive_port=5599),
         context=context,
     )
     try:

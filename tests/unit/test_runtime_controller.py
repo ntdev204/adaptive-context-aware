@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.runtime.controller import JetsonRuntimeController, RuntimeConfig
+from src.runtime.controller import AdaptiveRuntimeController, RuntimeConfig
 from src.transport.messages import ImuSampleMessage, LidarScanMessage
 
 
@@ -14,9 +14,9 @@ def test_runtime_status_requires_engine_camera_lidar_and_imu(tmp_path) -> None:
     rgb_device.write_bytes(b"")
     depth_device.write_bytes(b"")
 
-    controller = JetsonRuntimeController(
+    controller = AdaptiveRuntimeController(
         RuntimeConfig(
-            jetson_host="127.0.0.1",
+            adaptive_host="127.0.0.1",
             sensor_ingest_port=0,
             result_publish_port=0,
             engine_path=str(engine_path),

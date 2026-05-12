@@ -25,7 +25,7 @@ dev = [
     "pytest>=8.2.0",
 ]
 engine = [
-    # TensorRT / torch-tensorrt / CUDA Python bindings are provided by the Jetson runtime image.
+    # TensorRT / torch-tensorrt / CUDA Python bindings are provided by the target runtime image.
     "ultralytics>=8.3.0",
 ]
 
