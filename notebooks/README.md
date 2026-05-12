@@ -39,13 +39,26 @@ Thu muc nay luu notebook dung tren Colab Pro cho cac pipeline training hien co t
 
 ## Cach dung tren Colab
 
-1. Mount Google Drive neu muon luu checkpoint.
-2. Clone repo vao Colab.
-3. Cai dependency:
+1. Clone repo vao Colab.
+2. Cai dependency:
    - `pip install -e .[dev]`
    - hoac `pip install -e .[engine,dev]` neu can phan detector/runtime
-4. Chinh tham so trong notebook.
-5. Chay cell command goi thang `pipelines/`.
+3. Download dataset cong khai truc tiep trong notebook bang `roboflow` hoac `kagglehub`.
+4. Copy dataset custom tu Google Drive vao `repo/data/fine_tuning/...`.
+5. Chinh tham so trong notebook.
+6. Chay cell command goi thang `pipelines/`.
+
+## Quy uoc dataset tren Colab
+
+- Dataset cong khai duoc download truc tiep vao runtime Colab.
+- Dataset custom duoc copy tu:
+  - `MyDrive/deep/data/fine_tuning/custom_1`
+  - `MyDrive/deep/data/fine_tuning/custom_2`
+- Sau khi download/copy, notebook se move/copy vao:
+  - `repo/data/fine_tuning/...`
+- Ly do:
+  - pipeline trong repo doc dataset theo duong dan `data/...`
+  - khong can upload lai dataset cong khai len Drive
 
 ## Ghi chu cho H100
 
