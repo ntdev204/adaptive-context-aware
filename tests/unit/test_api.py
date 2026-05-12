@@ -34,6 +34,7 @@ def test_control_plane_exposes_config_and_metrics() -> None:
     assert config.json()["jetson_host"] == "127.0.0.1"
     assert config.json()["sensor_ingest_endpoint"] == "tcp://127.0.0.1:0"
     assert config.json()["result_publish_endpoint"] == "tcp://127.0.0.1:0"
+    assert config.json()["heartbeat_endpoint"] == "tcp://127.0.0.2:9093"
     assert config.json()["camera_rgb_device"] == "/tmp/astras-rgb"
 
     metrics = client.get("/metrics")
@@ -43,6 +44,7 @@ def test_control_plane_exposes_config_and_metrics() -> None:
     assert payload["engine_available"] is False
     assert payload["camera_available"] is False
     assert payload["result_publish_endpoint"] == "tcp://127.0.0.1:0"
+    assert payload["heartbeat_endpoint"] == "tcp://127.0.0.2:9093"
     assert payload["messages_received"] == 0
 
 

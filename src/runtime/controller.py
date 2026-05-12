@@ -4,10 +4,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from src.comm.health_monitor import HeartbeatClientDaemon
 from src.runtime.camera import AstraSCameraConfig, AstraSCameraRuntime
 from src.runtime.sensor_store import SensorStore
 from src.transport.zmq_result_publisher import ZmqResultPublisher, ZmqResultPublisherConfig
 from src.transport.zmq_sensor_ingest import SensorIngestStats, ZmqIngestConfig, ZmqSensorIngest
+from src.utils.enums import SafetyState
 
 
 class RuntimeState(StrEnum):
@@ -24,6 +26,8 @@ class RuntimeConfig:
     pi_host: str = "25.12.4.101"
     sensor_ingest_port: int = 5555
     result_publish_port: int = 5556
+    heartbeat_port: int = 9093
+    heartbeat_interval_ms: int = 500
     max_sensor_age_ms: int = 250
     engine_path: str = "/app/models/engines/yolo11s.engine"
     camera_rgb_device: str = "/dev/video0"
@@ -42,6 +46,7 @@ class RuntimeStatus:
     engine_available: bool
     camera_available: bool
     result_endpoint: str
+    heartbeat_endpoint: str
 
 
 class JetsonRuntimeController:
@@ -66,6 +71,7 @@ class JetsonRuntimeController:
         self._result_publisher = ZmqResultPublisher(
             ZmqResultPublisherConfig(bind_host=self.config.jetson_host, bind_port=self.config.result_publish_port)
         )
+        self._heartbeat_client: HeartbeatClientDaemon | None = None
 
     def start(self) -> RuntimeStatus:
         if self._state is RuntimeState.RUNNING:
@@ -74,6 +80,7 @@ class JetsonRuntimeController:
         try:
             self._ingest.start()
             self._result_publisher.start()
+            self._start_heartbeat()
         except Exception as exc:
             self._state = RuntimeState.ERROR
             self._reason = str(exc)
@@ -83,6 +90,7 @@ class JetsonRuntimeController:
         return self.status()
 
     def stop(self) -> RuntimeStatus:
+        self._stop_heartbeat()
         self._ingest.stop()
         self._result_publisher.stop()
         self._state = RuntimeState.STOPPED
@@ -127,6 +135,7 @@ class JetsonRuntimeController:
             engine_available=engine_available,
             camera_available=camera_available,
             result_endpoint=self._result_publisher.config.endpoint,
+            heartbeat_endpoint=f"tcp://{self.config.pi_host}:{self.config.heartbeat_port}",
         )
 
     def _camera_available(self) -> bool:
@@ -135,6 +144,33 @@ class JetsonRuntimeController:
         except Exception:
             return False
         return True
+
+    def _start_heartbeat(self) -> None:
+        if self._heartbeat_client is not None:
+            return
+        self._heartbeat_client = HeartbeatClientDaemon(
+            host=self.config.pi_host,
+            port=self.config.heartbeat_port,
+            timeout_s=0.5,
+            interval_s=self.config.heartbeat_interval_ms / 1000.0,
+            heartbeat_payload_factory=self._heartbeat_payload,
+        )
+        self._heartbeat_client.start()
+
+    def _stop_heartbeat(self) -> None:
+        if self._heartbeat_client is None:
+            return
+        self._heartbeat_client.stop()
+        self._heartbeat_client = None
+
+    def _heartbeat_payload(self) -> dict[str, float | int]:
+        status = self.status()
+        state = SafetyState.NORMAL if status.ready else SafetyState.DEGRADED
+        return {
+            "state": int(state),
+            "pipeline_fps": 0.0,
+            "gpu_temp_c": 0,
+        }
 
 
 def _is_stale(age_ms: float | None, max_age_ms: int) -> bool:
