@@ -17,6 +17,10 @@ class NetworkConfig(BaseModel):
     sensor_ingest_port: int = Field(ge=1, le=65535)
     result_publish_port: int = Field(ge=1, le=65535)
 
+    @property
+    def runtime_host(self) -> str:
+        return self.jetson_host
+
 
 class SafetyConfig(BaseModel):
     heartbeat_interval_ms: int = Field(gt=0)

@@ -8,7 +8,8 @@ import numpy as np
 import torch
 
 from models import AnomalyAutoencoder
-from src.decision.intent_predictor import ActivityClass, IntentPrediction
+from src.decision.intent_predictor import ActivityClass, IntentDirection, IntentPrediction
+from src.utils.constants import UNIFIED_REASONING_DIM
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,7 +22,7 @@ class AnomalyDetection:
 
 
 class AnomalyDetector:
-    INPUT_DIM = 256
+    INPUT_DIM = UNIFIED_REASONING_DIM
     ANOMALY_ACTIVITY_PRIORS = {
         ActivityClass.FALLING: 0.95,
         ActivityClass.FIGHTING: 0.95,
@@ -142,7 +143,7 @@ class AnomalyDetector:
         return self.ANOMALY_ACTIVITY_PRIORS.get(intent.activity, 0.05)
 
 
-def intents_direction_for(activity: ActivityClass) -> int:
+def intents_direction_for(activity: ActivityClass) -> IntentDirection:
     if activity in {ActivityClass.STANDING, ActivityClass.SITTING, ActivityClass.LOITERING}:
-        return 8
-    return 0
+        return IntentDirection.STATIONARY
+    return IntentDirection.NORTH

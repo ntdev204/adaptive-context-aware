@@ -1,0 +1,51 @@
+# Dockerfile.engine — Export best.pt → TensorRT .engine
+#
+# Build:
+#   make build-engine
+#
+# Run (exports .engine to ./models/engines/ on the host):
+#   docker run --gpus all --rm \
+#     -v "$(pwd)/models:/app/models" \
+#     ctx-aware:engine
+#
+# Output:
+#   models/engines/yolo11s.engine
+#
+# Notes:
+#   - Must be built and run on the TARGET machine (GPU architecture must match).
+#   - Requires NVIDIA Container Toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+#   - Half-precision (FP16) is enabled by default for faster inference.
+
+# ---------------------------------------------------------------------------
+# Base: NVIDIA TensorRT (comes with CUDA + cuDNN + TensorRT pre-installed)
+# Use the tag matching your host CUDA version. Check with: nvcc --version
+# ---------------------------------------------------------------------------
+FROM nvcr.io/nvidia/tensorrt:24.01-py3 AS exporter
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    APP_HOME=/app \
+    # Path where the .pt weight file is expected inside the container
+    CTX_PT_MODEL_PATH=/app/models/fine_tuning/best.pt \
+    # Destination for the generated .engine file
+    CTX_ENGINE_OUTPUT=/app/models/engines/yolo11s.engine \
+    # Export settings (can be overridden at docker run time)
+    ENGINE_IMG_SIZE=640 \
+    ENGINE_HALF=True \
+    ENGINE_WORKSPACE_GB=4 \
+    ENGINE_BATCH=1
+
+WORKDIR ${APP_HOME}
+
+# Install ultralytics (includes onnx + onnxruntime; TensorRT libs come from base image)
+RUN pip install --no-cache-dir ultralytics
+
+# Copy only what the export script needs
+COPY models/fine_tuning/best.pt ./models/fine_tuning/best.pt
+COPY scripts/export_engine.py   ./scripts/export_engine.py
+
+# Create output directory
+RUN mkdir -p /app/models/engines
+
+# Run the export at container start time so the output can be bind-mounted out
+CMD ["python", "scripts/export_engine.py"]

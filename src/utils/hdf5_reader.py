@@ -96,8 +96,7 @@ class HDF5Reader:
             imu_index = 0
             for frame_index in range(frame_count):
                 while (
-                    imu_index + 1 < len(imu_timestamps)
-                    and imu_timestamps[imu_index + 1] <= rgb_timestamps[frame_index]
+                    imu_index + 1 < len(imu_timestamps) and imu_timestamps[imu_index + 1] <= rgb_timestamps[frame_index]
                 ):
                     imu_index += 1
 

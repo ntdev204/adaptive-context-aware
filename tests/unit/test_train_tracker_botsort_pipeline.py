@@ -36,12 +36,7 @@ def _write_hallway_sequence(
     for frame_id in range(frames):
         (clip_dir / f"rgb{frame_id:06d}.png").write_bytes(b"")
         (clip_dir / f"depth{frame_id:06d}.png").write_bytes(b"")
-    gt = {
-        clip_name: {
-            frame_id: {0: [100, 120, 80, 160]}
-            for frame_id in range(frames)
-        }
-    }
+    gt = {clip_name: {frame_id: {0: [100, 120, 80, 160]} for frame_id in range(frames)}}
     import yaml
 
     (scene_dir / "ground_truth_image_plane.yaml").write_text(yaml.safe_dump(gt), encoding="utf-8")

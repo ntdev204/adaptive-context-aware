@@ -18,6 +18,17 @@ RuntimeFactory = Callable[[Path, tuple[str, ...]], PathwayRuntime]
 
 
 class TensorRTEngineRuntime:
+    """Thin adapter mapping :class:`TensorRTEngineRunner` to the :class:`PathwayRuntime` protocol.
+
+    This exists solely so that ``TensorRTEngineRuntime`` can be used as a
+    :data:`RuntimeFactory` callable. It adds path-existence checks that match
+    the ``TensorRTEngineRunner`` constructor.
+
+    .. note::
+        If you don't need the :class:`RuntimeFactory` indirection,
+        use :class:`TensorRTEngineRunner` directly.
+    """
+
     def __init__(self, model_path: Path, input_names: tuple[str, ...]) -> None:
         if not model_path.exists():
             raise FileNotFoundError(f"pathway TensorRT engine not found: {model_path}")

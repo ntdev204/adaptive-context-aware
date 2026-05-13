@@ -9,7 +9,7 @@ from .messages import SensorMessage, SensorMessageCodec
 
 @dataclass(frozen=True, slots=True)
 class ZmqSensorClientConfig:
-    jetson_host: str = "25.12.4.100"
+    jetson_host: str = "127.0.0.1"
     jetson_port: int = 5555
     high_water_mark: int = 1
 

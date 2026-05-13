@@ -7,6 +7,8 @@ import numpy as np
 import torch
 
 from models import IntentPredictorNet
+from src.utils.constants import UNIFIED_REASONING_DIM
+from src.utils.math import softmax
 
 
 class IntentDirection(IntEnum):
@@ -43,7 +45,7 @@ class IntentPrediction:
 
 
 class IntentPredictor:
-    INPUT_DIM = 256
+    INPUT_DIM = UNIFIED_REASONING_DIM
 
     def __init__(self, model: IntentPredictorNet | None = None) -> None:
         self.model = model or IntentPredictorNet()
@@ -61,8 +63,8 @@ class IntentPredictor:
         activity_logits = outputs["activity_logits"].detach().cpu().numpy().astype(np.float32, copy=False)
         trajectory_offsets = outputs["trajectory_offsets"].detach().cpu().numpy().astype(np.float32, copy=False)
 
-        direction_probabilities = _softmax(direction_logits)
-        activity_probabilities = _softmax(activity_logits)
+        direction_probabilities = softmax(direction_logits)
+        activity_probabilities = softmax(activity_logits)
         predictions: list[IntentPrediction] = []
         for index in range(fused.shape[0]):
             predictions.append(
@@ -75,9 +77,3 @@ class IntentPredictor:
                 )
             )
         return predictions
-
-
-def _softmax(logits: np.ndarray) -> np.ndarray:
-    shifted = logits - np.max(logits, axis=-1, keepdims=True)
-    exp = np.exp(shifted)
-    return (exp / np.sum(exp, axis=-1, keepdims=True)).astype(np.float32)
