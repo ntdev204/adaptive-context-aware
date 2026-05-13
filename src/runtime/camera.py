@@ -22,10 +22,6 @@ class AstraSCameraRuntime:
         self.config = config or AstraSCameraConfig()
 
     def assert_available(self) -> None:
-        missing = [
-            device
-            for device in (self.config.rgb_device, self.config.depth_device)
-            if not Path(device).exists()
-        ]
+        missing = [device for device in (self.config.rgb_device, self.config.depth_device) if not Path(device).exists()]
         if missing:
             raise CameraUnavailableError(f"AstraS camera device(s) not available: {', '.join(missing)}")

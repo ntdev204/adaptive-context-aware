@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from src.utils.validation import validate_ndarray
+
 
 @dataclass(slots=True)
 class EgoMotionState:
@@ -28,14 +30,15 @@ class IMUFusion:
         )
 
     def update(self, accel_xyz_mps2: np.ndarray, quat_xyzw: np.ndarray, timestamp_us: int) -> EgoMotionState:
-        accel = self._validate_vector(accel_xyz_mps2, expected_length=3, name="accel_xyz_mps2")
-        quat = self._validate_vector(quat_xyzw, expected_length=4, name="quat_xyzw")
+        validate_ndarray(accel_xyz_mps2, expected_shape=(3,), name="accel_xyz_mps2")
+        validate_ndarray(quat_xyzw, expected_shape=(4,), name="quat_xyzw")
+
         dt_s = 0.0
         if self._state.timestamp_us > 0:
             dt_s = max((timestamp_us - self._state.timestamp_us) / 1_000_000.0, 0.0)
 
-        velocity = self._state.velocity_xyz_mps + accel * dt_s
-        heading = self._yaw_from_quaternion(quat)
+        velocity = self._state.velocity_xyz_mps + accel_xyz_mps2 * dt_s
+        heading = self._yaw_from_quaternion(quat_xyzw)
         self._state = EgoMotionState(
             velocity_xyz_mps=velocity.astype(np.float32),
             heading_rad=float(heading),
@@ -49,14 +52,6 @@ class IMUFusion:
             heading_rad=self._state.heading_rad,
             timestamp_us=self._state.timestamp_us,
         )
-
-    @staticmethod
-    def _validate_vector(vector: np.ndarray, expected_length: int, name: str) -> np.ndarray:
-        if vector.shape != (expected_length,):
-            raise ValueError(f"expected {name} shape ({expected_length},)")
-        if vector.dtype != np.float32:
-            raise ValueError(f"expected {name} dtype float32")
-        return vector
 
     @staticmethod
     def _yaw_from_quaternion(quat_xyzw: np.ndarray) -> float:

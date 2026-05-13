@@ -10,6 +10,7 @@ import numpy as np
 
 from src.perception.sensor_fusion import FusedEntity
 from src.runtime.tensorrt_engine import TensorRTEngineRunner
+from src.utils.math import clip01, softmax
 
 
 class ComplexityLevel(IntEnum):
@@ -77,7 +78,7 @@ class ComplexityEstimator:
         if logits.shape != (input_vector.shape[0], len(ComplexityLevel)):
             raise ValueError("complexity runtime must return logits with shape [B, 4]")
 
-        probabilities = _softmax(logits)
+        probabilities = softmax(logits)
         level = ComplexityLevel(int(np.argmax(probabilities[0])))
         return ComplexityEstimate(
             level=level,
@@ -96,10 +97,10 @@ class ComplexityEstimator:
             [
                 np.array(
                     [
-                        _clip01(metrics.crowd_density),
-                        _clip01(metrics.motion_entropy),
-                        _clip01(metrics.anomaly_score_prev),
-                        _clip01(metrics.soh_budget),
+                        clip01(metrics.crowd_density),
+                        clip01(metrics.motion_entropy),
+                        clip01(metrics.anomaly_score_prev),
+                        clip01(metrics.soh_budget),
                     ],
                     dtype=np.float32,
                 ),
@@ -130,8 +131,8 @@ class ComplexityEstimator:
         return SceneComplexityMetrics(
             crowd_density=crowd_density,
             motion_entropy=_motion_entropy(entities),
-            anomaly_score_prev=_clip01(anomaly_score_prev),
-            soh_budget=_clip01(soh_budget),
+            anomaly_score_prev=clip01(anomaly_score_prev),
+            soh_budget=clip01(soh_budget),
             scene_embedding=embedding,
         )
 
@@ -178,6 +179,13 @@ class ComplexityEstimator:
 
 
 class _TensorRTEstimatorRuntime:
+    """Thin adapter for :class:`TensorRTEngineRunner` matching the :data:`EstimatorRuntime` protocol.
+
+    .. note::
+        If you don't need the :data:`EstimatorRuntime` indirection,
+        use :class:`TensorRTEngineRunner` directly.
+    """
+
     def __init__(self, model_path: Path) -> None:
         if not model_path.exists():
             raise FileNotFoundError(f"complexity estimator TensorRT engine not found: {model_path}")
@@ -204,14 +212,4 @@ def _motion_entropy(entities: Sequence[FusedEntity]) -> float:
     probabilities = counts[counts > 0].astype(np.float32)
     probabilities /= probabilities.sum()
     entropy = -float(np.sum(probabilities * np.log(probabilities)))
-    return _clip01(entropy / np.log(8.0))
-
-
-def _softmax(logits: np.ndarray) -> np.ndarray:
-    shifted = logits - np.max(logits, axis=-1, keepdims=True)
-    exp = np.exp(shifted)
-    return (exp / np.sum(exp, axis=-1, keepdims=True)).astype(np.float32)
-
-
-def _clip01(value: float) -> float:
-    return float(np.clip(value, 0.0, 1.0))
+    return clip01(entropy / np.log(8.0))

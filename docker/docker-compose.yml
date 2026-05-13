@@ -73,5 +73,37 @@ services:
       - ../scripts:/app/scripts
     command: ["python", "-m", "src.main"]
 
+  synthetic-h5:
+    profiles: ["dataset"]
+    image: ctx-aware:dev
+    environment:
+      CTX_RUNTIME_ROLE: synthetic-h5
+      SYNTHETIC_RAW_DIR: ${SYNTHETIC_RAW_DIR:-data/raw}
+      SYNTHETIC_OUTPUT_DIR: ${SYNTHETIC_OUTPUT_DIR:-data/synthetic_h5}
+      SYNTHETIC_MODEL_PATH: ${SYNTHETIC_MODEL_PATH:-models/fine_tuning/best.pt}
+      SYNTHETIC_TRACKER_CONFIG: ${SYNTHETIC_TRACKER_CONFIG:-models/fine_tuning/botsort_tuned.json}
+      SYNTHETIC_SOURCE_KIND: ${SYNTHETIC_SOURCE_KIND:-all}
+      SYNTHETIC_IMAGE_DETECTION_SOURCE: ${SYNTHETIC_IMAGE_DETECTION_SOURCE:-hybrid}
+      SYNTHETIC_EXTRA_ARGS: ${SYNTHETIC_EXTRA_ARGS:-}
+    volumes:
+      - ../src:/app/src
+      - ../config:/app/config
+      - ../pipelines:/app/pipelines
+      - ../data:/app/data
+      - ../models:/app/models
+    command:
+      - sh
+      - -lc
+      - >
+        python -c "import PIL" 2>/dev/null || pip install --no-cache-dir pillow;
+        python pipelines/generate_synthetic_h5.py
+        --raw-dir "$${SYNTHETIC_RAW_DIR}"
+        --output-dir "$${SYNTHETIC_OUTPUT_DIR}"
+        --model-path "$${SYNTHETIC_MODEL_PATH}"
+        --tracker-config "$${SYNTHETIC_TRACKER_CONFIG}"
+        --source-kind "$${SYNTHETIC_SOURCE_KIND}"
+        --image-detection-source "$${SYNTHETIC_IMAGE_DETECTION_SOURCE}"
+        $${SYNTHETIC_EXTRA_ARGS}
+
 volumes:
   ctx-aware-engines:

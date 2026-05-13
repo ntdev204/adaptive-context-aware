@@ -10,7 +10,7 @@ import yaml
 
 @dataclass(frozen=True, slots=True)
 class DetectorTrainingConfig:
-    base_model: str = "yolo11s.pt"
+    base_model: str = "yolo11m.pt"
     pretrain_dataset: Path = Path("data/fine_tuning/cctv_person/data.yaml")
     custom_datasets: tuple[Path, ...] = (
         Path("data/fine_tuning/custom_1"),

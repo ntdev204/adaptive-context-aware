@@ -9,6 +9,7 @@ from src.runtime.camera import AstraSCameraConfig, AstraSCameraRuntime
 from src.runtime.sensor_store import SensorStore
 from src.transport.zmq_result_publisher import ZmqResultPublisher, ZmqResultPublisherConfig
 from src.transport.zmq_sensor_ingest import SensorIngestStats, ZmqIngestConfig, ZmqSensorIngest
+from src.utils.constants import FRAME_HEIGHT, FRAME_WIDTH
 from src.utils.enums import SafetyState
 
 
@@ -22,7 +23,7 @@ class RuntimeState(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class RuntimeConfig:
-    jetson_host: str = "25.12.4.100"
+    jetson_host: str = "127.0.0.1"
     pi_host: str = "25.12.4.101"
     sensor_ingest_port: int = 5555
     result_publish_port: int = 5556
@@ -32,8 +33,8 @@ class RuntimeConfig:
     engine_path: str = "/app/models/engines/yolo11s.engine"
     camera_rgb_device: str = "/dev/video0"
     camera_depth_device: str = "/dev/video1"
-    camera_width: int = 640
-    camera_height: int = 480
+    camera_width: int = FRAME_WIDTH
+    camera_height: int = FRAME_HEIGHT
     camera_fps: int = 30
 
 
@@ -50,7 +51,11 @@ class RuntimeStatus:
 
 
 class JetsonRuntimeController:
-    def __init__(self, config: RuntimeConfig | None = None, sensor_store: SensorStore | None = None) -> None:
+    def __init__(
+        self,
+        config: RuntimeConfig | None = None,
+        sensor_store: SensorStore | None = None,
+    ) -> None:
         self.config = config or RuntimeConfig()
         self.sensor_store = sensor_store or SensorStore()
         self._state = RuntimeState.STOPPED
@@ -65,11 +70,17 @@ class JetsonRuntimeController:
             )
         )
         self._ingest = ZmqSensorIngest(
-            ZmqIngestConfig(bind_host=self.config.jetson_host, bind_port=self.config.sensor_ingest_port),
+            ZmqIngestConfig(
+                bind_host=self.config.jetson_host,
+                bind_port=self.config.sensor_ingest_port,
+            ),
             handler=self.sensor_store.update,
         )
         self._result_publisher = ZmqResultPublisher(
-            ZmqResultPublisherConfig(bind_host=self.config.jetson_host, bind_port=self.config.result_publish_port)
+            ZmqResultPublisherConfig(
+                bind_host=self.config.jetson_host,
+                bind_port=self.config.result_publish_port,
+            )
         )
         self._heartbeat_client: HeartbeatClientDaemon | None = None
 
@@ -112,7 +123,7 @@ class JetsonRuntimeController:
         )
         if self._state is RuntimeState.RUNNING:
             if not engine_available:
-                reason = "waiting for TensorRT engine"
+                reason = "waiting for inference engine"
             elif not camera_available:
                 reason = "waiting for AstraS RGB-D camera devices"
             elif not snapshot.has_lidar:

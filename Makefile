@@ -4,8 +4,8 @@ PYTEST ?= $(PYTHON) -m pytest
 DOCKER ?= docker
 COMPOSE ?= $(DOCKER) compose -f docker/docker-compose.yml
 
-.PHONY: help install install-dev test test-unit lint fixtures fixtures-download benchmark-ci benchmark-jetson baseline-update \
-	docker-build-dev docker-build-test docker-build-prod compose-config compose-up compose-down run clean
+.PHONY: help install install-dev test test-unit lint fixtures fixtures-download benchmark-ci benchmark-laptop benchmark-jetson baseline-update \
+	docker-build-dev docker-build-test docker-build-prod build-engine compose-config compose-up compose-down run clean
 
 help:
 	@echo "Available targets:"
@@ -17,11 +17,12 @@ help:
 	@echo "  fixtures           Generate synthetic fixtures"
 	@echo "  fixtures-download  Create/download external fixture directories"
 	@echo "  benchmark-ci       Run CI benchmark baseline comparison"
-	@echo "  benchmark-jetson   Run Jetson benchmark flow"
+	@echo "  benchmark-laptop   Run laptop benchmark flow"
 	@echo "  baseline-update    Refresh CI baselines"
 	@echo "  docker-build-dev   Build development image"
 	@echo "  docker-build-test  Build test image"
 	@echo "  docker-build-prod  Build production image"
+	@echo "  build-engine       Export best.pt → TensorRT .engine (requires --gpus all)"
 	@echo "  compose-config     Validate docker compose config"
 	@echo "  compose-up         Start compose services"
 	@echo "  compose-down       Stop compose services"
@@ -51,8 +52,10 @@ fixtures-download:
 benchmark-ci:
 	$(PYTHON) scripts/benchmark.py --device ci --compare-baseline
 
-benchmark-jetson:
-	$(PYTHON) scripts/benchmark.py --device jetson --frames 1000
+benchmark-laptop:
+	$(PYTHON) scripts/benchmark.py --device laptop --frames 1000
+
+benchmark-jetson: benchmark-laptop
 
 baseline-update:
 	$(PYTHON) scripts/update_ci_baselines.py --source local --output tests/benchmark/baselines
@@ -66,11 +69,14 @@ docker-build-test:
 docker-build-prod:
 	$(DOCKER) build -f docker/Dockerfile.prod -t ctx-aware:prod .
 
+build-engine:
+	$(DOCKER) build -f docker/Dockerfile.engine -t ctx-aware:engine .
+
 compose-config:
 	$(COMPOSE) config
 
 compose-up:
-	$(COMPOSE) up --build
+	$(COMPOSE) up --build -d
 
 compose-down:
 	$(COMPOSE) down
@@ -79,4 +85,4 @@ run:
 	$(PYTHON) -m src.main
 
 clean:
-	$(PYTHON) -c "from pathlib import Path; [p.unlink() for p in Path('benchmarks').glob('jetson_report_*.json')] if Path('benchmarks').exists() else None"
+	$(PYTHON) -c "from pathlib import Path; [p.unlink() for p in Path('benchmarks').glob('laptop_report_*.json')] if Path('benchmarks').exists() else None"

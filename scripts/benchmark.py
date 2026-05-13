@@ -77,7 +77,7 @@ def update_ci_baselines(source: str, output_dir: Path) -> None:
             "captured_on": source,
             "captured_at": datetime.now(timezone.utc).isoformat(),
             "ci_runner": source,
-            "capture_note": "baselines MUST be captured on CI runner (same hardware class), not Jetson",
+            "capture_note": "baselines MUST be captured on CI runner (same hardware class), not the robot laptop",
             "models": {
                 "yolo11s": {"ci_cpu_ms": metrics["latency_ms"]["yolo11s"], "tolerance_pct": 15},
                 "gru_pathway": {"ci_cpu_ms": metrics["latency_ms"]["gru_pathway"], "tolerance_pct": 15},
@@ -166,9 +166,9 @@ def compare_ci_baseline() -> int:
     return 0
 
 
-def run_jetson(frames: int) -> int:
+def run_laptop(frames: int) -> int:
     report = {
-        "device": "jetson-orin-nano-8gb-simulated",
+        "device": "robot-laptop-simulated",
         "date": datetime.now(timezone.utc).isoformat(),
         "pipeline": {
             "fps": {"mean": 22.1, "std": 1.3, "min": 18.5, "max": 25.0},
@@ -191,10 +191,14 @@ def run_jetson(frames: int) -> int:
     }
     report_dir = ROOT / "benchmarks"
     report_dir.mkdir(parents=True, exist_ok=True)
-    report_path = report_dir / f"jetson_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    report_path = report_dir / f"laptop_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     _save_json(report_path, report)
     print(json.dumps(report, indent=2))
     return 0
+
+
+def run_jetson(frames: int) -> int:
+    return run_laptop(frames)
 
 
 def run_perception_benchmark(frames: int = 100) -> dict[str, object]:
@@ -228,7 +232,7 @@ def run_perception_benchmark(frames: int = 100) -> dict[str, object]:
     fps = 1000.0 * frames / max(total_ms, 1e-6)
     peak_rss_mb = 256.0 + entity_count * 0.5
     report = {
-        "device": "jetson-orin-nano-8gb-simulated",
+        "device": "robot-laptop-simulated",
         "date": total_start.isoformat(),
         "pipeline": {
             "fps": {
@@ -283,7 +287,7 @@ def run_perception_benchmark(frames: int = 100) -> dict[str, object]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--device", choices=["ci", "jetson", "perception"], required=True)
+    parser.add_argument("--device", choices=["ci", "laptop", "jetson", "perception"], required=True)
     parser.add_argument("--compare-baseline", action="store_true")
     parser.add_argument("--frames", type=int, default=1000)
     parser.add_argument("--source", default="local")
@@ -296,6 +300,8 @@ def main() -> int:
         return 0
     if args.device == "ci" and args.compare_baseline:
         return compare_ci_baseline()
+    if args.device == "laptop":
+        return run_laptop(args.frames)
     if args.device == "jetson":
         return run_jetson(args.frames)
     if args.device == "perception":

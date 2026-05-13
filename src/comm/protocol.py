@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import BinaryIO, Iterable
 
-MAGIC = b"\xCA\xFE"
+MAGIC = b"\xca\xfe"
 HEADER_FORMAT = "!2s B I Q I"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 CRC_FORMAT = "!H"
@@ -68,7 +68,7 @@ def decode_packet(raw: bytes) -> Packet:
     expected_size = HEADER_SIZE + payload_len + CRC_SIZE
     if len(raw) != expected_size:
         raise ValueError("packet length mismatch")
-    payload = raw[HEADER_SIZE:HEADER_SIZE + payload_len]
+    payload = raw[HEADER_SIZE : HEADER_SIZE + payload_len]
     (crc_received,) = struct.unpack(CRC_FORMAT, raw[-CRC_SIZE:])
     crc_expected = crc16_ccitt(raw[:-CRC_SIZE])
     if crc_received != crc_expected:
@@ -200,7 +200,7 @@ def unpack_lidar_scan(payload: bytes) -> dict[str, object]:
     points: list[tuple[float, float]] = []
     offset = 4
     for _ in range(num_points):
-        angle_rad, distance_m = struct.unpack("!f f", payload[offset:offset + 8])
+        angle_rad, distance_m = struct.unpack("!f f", payload[offset : offset + 8])
         points.append((angle_rad, distance_m))
         offset += 8
     return {"num_points": num_points, "points": points}

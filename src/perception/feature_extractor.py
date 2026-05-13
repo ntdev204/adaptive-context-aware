@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from src.utils.constants import FRAME_HEIGHT, FRAME_WIDTH
+
 from .sensor_fusion import FusedEntity
 
 
@@ -21,10 +23,10 @@ class EntityFeatureExtractor:
     def extract(self, entity: FusedEntity) -> EntityFeatures:
         base_vector = np.array(
             [
-                entity.bbox_xywh[0] / 640.0,
-                entity.bbox_xywh[1] / 480.0,
-                entity.bbox_xywh[2] / 640.0,
-                entity.bbox_xywh[3] / 480.0,
+                entity.bbox_xywh[0] / FRAME_WIDTH,
+                entity.bbox_xywh[1] / FRAME_HEIGHT,
+                entity.bbox_xywh[2] / FRAME_WIDTH,
+                entity.bbox_xywh[3] / FRAME_HEIGHT,
                 entity.position_3d[0],
                 entity.position_3d[1],
                 entity.position_3d[2],

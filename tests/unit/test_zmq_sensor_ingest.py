@@ -34,7 +34,7 @@ def test_zmq_sensor_ingest_receives_lidar_and_imu() -> None:
                 sequence=1,
                 timestamp_us=100,
                 scan_points=np.array([[0.0, 1.0], [0.1, 1.1], [0.2, 1.2]], dtype=np.float32),
-            )
+            ),
         )
         _send_with_retry(
             client,
@@ -44,7 +44,7 @@ def test_zmq_sensor_ingest_receives_lidar_and_imu() -> None:
                 timestamp_us=101,
                 accel_xyz_mps2=np.array([0.0, 0.0, 9.8], dtype=np.float32),
                 quat_xyzw=np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32),
-            )
+            ),
         )
 
         deadline = time.monotonic() + 1.0
