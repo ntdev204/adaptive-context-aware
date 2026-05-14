@@ -5,7 +5,7 @@ DOCKER ?= docker
 COMPOSE ?= $(DOCKER) compose -f docker/docker-compose.yml
 
 .PHONY: help install install-dev test test-unit lint fixtures fixtures-download benchmark-ci benchmark-laptop benchmark-jetson baseline-update \
-	docker-build-dev docker-build-test docker-build-prod jetson-build-dev jetson-build-prod build-engine compose-config compose-up compose-down run clean
+	docker-build-dev docker-build-test docker-build-prod build-engine compose-config compose-up compose-down run clean
 
 help:
 	@echo "Available targets:"
@@ -19,11 +19,9 @@ help:
 	@echo "  benchmark-ci       Run CI benchmark baseline comparison"
 	@echo "  benchmark-laptop   Run laptop benchmark flow"
 	@echo "  baseline-update    Refresh CI baselines"
-	@echo "  docker-build-dev   Build development image"
+	@echo "  docker-build-dev   Build Jetson-native development image"
 	@echo "  docker-build-test  Build test image"
-	@echo "  docker-build-prod  Build production image"
-	@echo "  jetson-build-dev   Build Jetson development image (dustynv/l4t-pytorch)"
-	@echo "  jetson-build-prod  Build Jetson production image (dustynv/l4t-pytorch)"
+	@echo "  docker-build-prod  Build Jetson-native production image"
 	@echo "  build-engine       Export best.pt → TensorRT .engine (requires --gpus all)"
 	@echo "  compose-config     Validate docker compose config"
 	@echo "  compose-up         Start compose services"
@@ -70,12 +68,6 @@ docker-build-test:
 
 docker-build-prod:
 	$(DOCKER) build -f docker/Dockerfile.prod -t ctx-aware:prod .
-
-jetson-build-dev:
-	$(DOCKER) build -f docker/Dockerfile.jetson --target jetson-dev -t ctx-aware:jetson-dev .
-
-jetson-build-prod:
-	$(DOCKER) build -f docker/Dockerfile.jetson --target jetson-prod -t ctx-aware:jetson-prod .
 
 build-engine:
 	$(DOCKER) build -f docker/Dockerfile.engine -t ctx-aware:engine .
