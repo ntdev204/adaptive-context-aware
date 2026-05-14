@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .imu_fusion import EgoMotionState
+from .lidar_proc import LidarCluster
 from .tracker import TrackState
 
 
@@ -24,18 +26,44 @@ class SensorFusion:
     def fuse(
         self,
         tracks: list[TrackState],
+        ego_motion: EgoMotionState | None = None,
+        lidar_clusters: list[LidarCluster] | None = None,
     ) -> list[FusedEntity]:
+        ego_velocity = (
+            ego_motion.velocity_xyz_mps.astype(np.float32, copy=True)
+            if ego_motion is not None
+            else np.zeros(3, dtype=np.float32)
+        )
+        heading_rad = float(ego_motion.heading_rad) if ego_motion is not None else 0.0
+        clusters = lidar_clusters or []
+
         return [
             FusedEntity(
                 track_id=track.track_id,
                 bbox_xywh=track.bbox_xywh.copy(),
                 position_3d=track.position_3d.copy(),
                 velocity_3d=track.velocity_3d.copy(),
-                heading_rad=0.0,
+                heading_rad=heading_rad,
                 confidence=track.confidence,
-                nearest_obstacle_distance_m=None,
-                nearest_obstacle_centroid_xy=None,
-                ego_velocity_xyz_mps=np.zeros(3, dtype=np.float32),
+                nearest_obstacle_distance_m=_nearest_cluster(track, clusters)[0],
+                nearest_obstacle_centroid_xy=_nearest_cluster(track, clusters)[1],
+                ego_velocity_xyz_mps=ego_velocity.copy(),
             )
             for track in tracks
         ]
+
+
+def _nearest_cluster(track: TrackState, lidar_clusters: list[LidarCluster]) -> tuple[float | None, np.ndarray | None]:
+    if not lidar_clusters:
+        return None, None
+
+    track_xy = np.asarray(track.position_3d[:2], dtype=np.float32)
+    nearest_distance: float | None = None
+    nearest_centroid: np.ndarray | None = None
+    for cluster in lidar_clusters:
+        centroid = np.asarray(cluster.centroid_xy, dtype=np.float32)
+        distance = float(np.linalg.norm(centroid - track_xy))
+        if nearest_distance is None or distance < nearest_distance:
+            nearest_distance = distance
+            nearest_centroid = centroid.copy()
+    return nearest_distance, nearest_centroid

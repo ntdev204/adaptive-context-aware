@@ -34,6 +34,7 @@ class NavigationCommand:
 class NavigationCommander:
     CRITICAL_ANOMALY_THRESHOLD = 0.85
     COLLISION_DISTANCE_THRESHOLD_M = 1.25
+    CAUTION_ANOMALY_THRESHOLD = 0.55
 
     def compute_command(
         self,
@@ -72,6 +73,8 @@ class NavigationCommander:
             predicted_velocity = _direction_unit_vector(intent.direction) * np.linalg.norm(entity.velocity_3d[:2])
             predicted_position = relative_xy + predicted_velocity + intent.trajectory_offsets[0]
             risk = self._collision_risk(predicted_position, distance=distance, anomaly_score=anomaly.score)
+            if anomaly.is_anomaly and distance <= self.COLLISION_DISTANCE_THRESHOLD_M:
+                risk = max(risk, 0.45)
             if risk <= 0.0:
                 continue
 

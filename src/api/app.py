@@ -13,7 +13,7 @@ def create_app(controller: JetsonRuntimeController | None = None) -> FastAPI:
     runtime = controller or JetsonRuntimeController(_load_runtime_config())
     app = FastAPI(
         title="Jetson Context Aware Control API",
-        version="1.0.0",
+        version="1.0.1",
         description="Control plane for the Jetson runtime. Frame and sensor data use ZMQ/protobuf data plane.",
     )
     app.state.runtime = runtime
