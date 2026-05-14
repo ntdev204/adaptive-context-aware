@@ -203,7 +203,12 @@ class AdaptiveRoutingEnv:
             self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(39,), dtype=np.float32)
             self.action_space = spaces.Discrete(len(RoutingAction))
 
-    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[np.ndarray, dict[str, Any]]:
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[np.ndarray, dict[str, Any]]:
         del seed, options
         self.index = 0
         self.steps = 0
@@ -268,7 +273,11 @@ def evaluate_action(action: RoutingAction, scenario: RLScenario) -> tuple[float,
     accuracy = 1.0 - abs(action_complexity - target_complexity)
     latency_penalty = 0.08 * int(action)
     energy_penalty = 0.06 * int(action) * max(0.2, 1.0 - scenario.soh_budget)
-    anomaly_bonus = 0.2 if scenario.expected_action == RoutingAction.EMERGENCY and action == scenario.expected_action else 0.0
+    anomaly_bonus = (
+        0.2
+        if scenario.expected_action == RoutingAction.EMERGENCY and action == scenario.expected_action
+        else 0.0
+    )
     reward = accuracy - latency_penalty - energy_penalty + anomaly_bonus
     return reward, {
         "accuracy": accuracy,
