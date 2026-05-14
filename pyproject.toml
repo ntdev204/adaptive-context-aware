@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adaptive-context-aware"
-version = "0.1.0"
+version = "1.0.1"
 description = "Adaptive context-aware perception system baseline implementation."
 requires-python = ">=3.11"
 dependencies = [
