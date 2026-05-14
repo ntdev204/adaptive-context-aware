@@ -5,9 +5,10 @@ from enum import StrEnum
 
 import numpy as np
 
-from src.decision.anomaly_detector import AnomalyDetection
-from src.decision.intent_predictor import IntentDirection, IntentPrediction
 from src.perception.sensor_fusion import FusedEntity
+
+from .anomaly_detector import AnomalyDetection
+from .intent_predictor import IntentDirection, IntentPrediction
 
 
 class NavigationMode(StrEnum):
@@ -118,16 +119,18 @@ def _normalize(vector: np.ndarray) -> np.ndarray:
     return (vector / norm).astype(np.float32, copy=False)
 
 
+_DIRECTION_UNIT_VECTORS: dict[IntentDirection, np.ndarray] = {
+    IntentDirection.NORTH: np.array([0.0, 1.0], dtype=np.float32),
+    IntentDirection.NE: _normalize(np.array([1.0, 1.0], dtype=np.float32)),
+    IntentDirection.EAST: np.array([1.0, 0.0], dtype=np.float32),
+    IntentDirection.SE: _normalize(np.array([1.0, -1.0], dtype=np.float32)),
+    IntentDirection.SOUTH: np.array([0.0, -1.0], dtype=np.float32),
+    IntentDirection.SW: _normalize(np.array([-1.0, -1.0], dtype=np.float32)),
+    IntentDirection.WEST: np.array([-1.0, 0.0], dtype=np.float32),
+    IntentDirection.NW: _normalize(np.array([-1.0, 1.0], dtype=np.float32)),
+    IntentDirection.STATIONARY: np.zeros(2, dtype=np.float32),
+}
+
+
 def _direction_unit_vector(direction: IntentDirection) -> np.ndarray:
-    lookup = {
-        IntentDirection.NORTH: np.array([0.0, 1.0], dtype=np.float32),
-        IntentDirection.NE: np.array([1.0, 1.0], dtype=np.float32),
-        IntentDirection.EAST: np.array([1.0, 0.0], dtype=np.float32),
-        IntentDirection.SE: np.array([1.0, -1.0], dtype=np.float32),
-        IntentDirection.SOUTH: np.array([0.0, -1.0], dtype=np.float32),
-        IntentDirection.SW: np.array([-1.0, -1.0], dtype=np.float32),
-        IntentDirection.WEST: np.array([-1.0, 0.0], dtype=np.float32),
-        IntentDirection.NW: np.array([-1.0, 1.0], dtype=np.float32),
-        IntentDirection.STATIONARY: np.zeros(2, dtype=np.float32),
-    }
-    return _normalize(lookup[direction])
+    return _DIRECTION_UNIT_VECTORS[direction]

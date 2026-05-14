@@ -9,8 +9,7 @@ from src.utils.enums import SafetyState, StatusChangeReason
 def test_valid_transitions_succeed() -> None:
     fsm = SafetyStateMachine()
     assert (
-        fsm.request_transition(SafetyState.DEGRADED, StatusChangeReason.GPU_OVERHEAT).new_state
-        == SafetyState.DEGRADED
+        fsm.request_transition(SafetyState.DEGRADED, StatusChangeReason.GPU_OVERHEAT).new_state == SafetyState.DEGRADED
     )
     assert fsm.request_transition(SafetyState.ESTOP, StatusChangeReason.CAMERA_FAIL).new_state == SafetyState.ESTOP
     assert (

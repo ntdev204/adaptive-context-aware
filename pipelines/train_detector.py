@@ -10,9 +10,12 @@ import yaml
 
 @dataclass(frozen=True, slots=True)
 class DetectorTrainingConfig:
-    base_model: str = "yolo11s.pt"
+    base_model: str = "yolo11m.pt"
     pretrain_dataset: Path = Path("data/fine_tuning/cctv_person/data.yaml")
-    custom_datasets: tuple[Path, ...] = ()
+    custom_datasets: tuple[Path, ...] = (
+        Path("data/fine_tuning/custom_1"),
+        Path("data/fine_tuning/custom_2"),
+    )
     work_dir: Path = Path("artifacts/detector")
     image_size: int = 640
     pretrain_epochs: int = 30
@@ -28,15 +31,8 @@ class DetectorTrainingConfig:
 @dataclass(frozen=True, slots=True)
 class DetectorTrainingPlan:
     pretrain_weights: Path
-    finetune_weights: Path | None
-    merged_dataset_yaml: Path | None
-
-    @property
-    def final_weights(self) -> Path:
-        return self.finetune_weights or self.pretrain_weights
-
-
-DEFAULT_DETECTOR_TRAINING_CONFIG = DetectorTrainingConfig()
+    finetune_weights: Path
+    merged_dataset_yaml: Path
 
 
 def load_yolo_dataset_config(path: str | Path) -> dict[str, object]:
@@ -98,9 +94,6 @@ def build_person_only_dataset(
 
 
 def build_merged_dataset(dataset_yamls: list[Path], output_root: str | Path) -> Path:
-    if not dataset_yamls:
-        raise ValueError("at least one dataset yaml is required")
-
     output_dir = Path(output_root)
     if output_dir.exists():
         shutil.rmtree(output_dir)
@@ -146,17 +139,13 @@ def build_merged_dataset(dataset_yamls: list[Path], output_root: str | Path) -> 
     return merged_yaml
 
 
-def plan_detector_training(config: DetectorTrainingConfig = DEFAULT_DETECTOR_TRAINING_CONFIG) -> DetectorTrainingPlan:
+def plan_detector_training(config: DetectorTrainingConfig = DetectorTrainingConfig()) -> DetectorTrainingPlan:
+    merged_dataset_yaml = build_merged_dataset(
+        [dataset_dir / "data.yaml" for dataset_dir in config.custom_datasets],
+        config.work_dir / "merged_custom_dataset",
+    )
     pretrain_weights = config.work_dir / config.project_name / config.run_name_pretrain / "weights" / "best.pt"
-    merged_dataset_yaml = None
-    finetune_weights = None
-    if config.custom_datasets:
-        merged_dataset_yaml = build_merged_dataset(
-            [dataset_dir / "data.yaml" for dataset_dir in config.custom_datasets],
-            config.work_dir / "merged_custom_dataset",
-        )
-        finetune_weights = config.work_dir / config.project_name / config.run_name_finetune / "weights" / "best.pt"
-
+    finetune_weights = config.work_dir / config.project_name / config.run_name_finetune / "weights" / "best.pt"
     return DetectorTrainingPlan(
         pretrain_weights=pretrain_weights,
         finetune_weights=finetune_weights,
@@ -164,7 +153,7 @@ def plan_detector_training(config: DetectorTrainingConfig = DEFAULT_DETECTOR_TRA
     )
 
 
-def train_detector(config: DetectorTrainingConfig = DEFAULT_DETECTOR_TRAINING_CONFIG) -> DetectorTrainingPlan:
+def train_detector(config: DetectorTrainingConfig = DetectorTrainingConfig()) -> DetectorTrainingPlan:
     try:
         from ultralytics import YOLO
     except ImportError as exc:
@@ -172,7 +161,7 @@ def train_detector(config: DetectorTrainingConfig = DEFAULT_DETECTOR_TRAINING_CO
 
     plan = plan_detector_training(config)
     model = YOLO(config.base_model)
-    pretrain_results = model.train(
+    model.train(
         data=str(config.pretrain_dataset),
         epochs=config.pretrain_epochs,
         imgsz=config.image_size,
@@ -182,32 +171,19 @@ def train_detector(config: DetectorTrainingConfig = DEFAULT_DETECTOR_TRAINING_CO
         project=str(config.work_dir / config.project_name),
         name=config.run_name_pretrain,
     )
-    pretrain_weights = _resolve_best_weights(pretrain_results, fallback=plan.pretrain_weights)
 
-    if plan.merged_dataset_yaml is not None:
-        finetune_model = YOLO(str(pretrain_weights))
-        finetune_results = finetune_model.train(
-            data=str(plan.merged_dataset_yaml),
-            epochs=config.finetune_epochs,
-            imgsz=config.image_size,
-            batch=config.batch_size,
-            device=config.device,
-            workers=config.workers,
-            project=str(config.work_dir / config.project_name),
-            name=config.run_name_finetune,
-        )
-        finetune_weights = _resolve_best_weights(finetune_results, fallback=plan.finetune_weights)
-        return DetectorTrainingPlan(
-            pretrain_weights=pretrain_weights,
-            finetune_weights=finetune_weights,
-            merged_dataset_yaml=plan.merged_dataset_yaml,
-        )
-
-    return DetectorTrainingPlan(
-        pretrain_weights=pretrain_weights,
-        finetune_weights=None,
-        merged_dataset_yaml=None,
+    finetune_model = YOLO(str(plan.pretrain_weights))
+    finetune_model.train(
+        data=str(plan.merged_dataset_yaml),
+        epochs=config.finetune_epochs,
+        imgsz=config.image_size,
+        batch=config.batch_size,
+        device=config.device,
+        workers=config.workers,
+        project=str(config.work_dir / config.project_name),
+        name=config.run_name_finetune,
     )
+    return plan
 
 
 def _filter_person_only_annotations(label_path: Path, person_class_index: int) -> list[str]:
@@ -225,24 +201,24 @@ def _filter_person_only_annotations(label_path: Path, person_class_index: int) -
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train the YOLO11 detector from the CCTV person dataset.")
-    parser.add_argument("--base-model", default=DEFAULT_DETECTOR_TRAINING_CONFIG.base_model)
-    parser.add_argument("--pretrain-dataset", type=Path, default=DEFAULT_DETECTOR_TRAINING_CONFIG.pretrain_dataset)
+    parser = argparse.ArgumentParser(description="Stage YOLO11 detector training from CCTV and custom school datasets.")
+    parser.add_argument("--base-model", default=DetectorTrainingConfig.base_model)
+    parser.add_argument("--pretrain-dataset", type=Path, default=DetectorTrainingConfig.pretrain_dataset)
     parser.add_argument("--custom-dataset", action="append", type=Path, dest="custom_datasets")
-    parser.add_argument("--work-dir", type=Path, default=DEFAULT_DETECTOR_TRAINING_CONFIG.work_dir)
-    parser.add_argument("--imgsz", type=int, default=DEFAULT_DETECTOR_TRAINING_CONFIG.image_size)
-    parser.add_argument("--pretrain-epochs", type=int, default=DEFAULT_DETECTOR_TRAINING_CONFIG.pretrain_epochs)
-    parser.add_argument("--finetune-epochs", type=int, default=DEFAULT_DETECTOR_TRAINING_CONFIG.finetune_epochs)
-    parser.add_argument("--batch-size", type=int, default=DEFAULT_DETECTOR_TRAINING_CONFIG.batch_size)
-    parser.add_argument("--device", default=DEFAULT_DETECTOR_TRAINING_CONFIG.device)
-    parser.add_argument("--workers", type=int, default=DEFAULT_DETECTOR_TRAINING_CONFIG.workers)
+    parser.add_argument("--work-dir", type=Path, default=DetectorTrainingConfig.work_dir)
+    parser.add_argument("--imgsz", type=int, default=DetectorTrainingConfig.image_size)
+    parser.add_argument("--pretrain-epochs", type=int, default=DetectorTrainingConfig.pretrain_epochs)
+    parser.add_argument("--finetune-epochs", type=int, default=DetectorTrainingConfig.finetune_epochs)
+    parser.add_argument("--batch-size", type=int, default=DetectorTrainingConfig.batch_size)
+    parser.add_argument("--device", default=DetectorTrainingConfig.device)
+    parser.add_argument("--workers", type=int, default=DetectorTrainingConfig.workers)
     parser.add_argument("--plan-only", action="store_true")
     args = parser.parse_args()
 
     config = DetectorTrainingConfig(
         base_model=args.base_model,
         pretrain_dataset=args.pretrain_dataset,
-        custom_datasets=tuple(args.custom_datasets or ()),
+        custom_datasets=tuple(args.custom_datasets or DetectorTrainingConfig.custom_datasets),
         work_dir=args.work_dir,
         image_size=args.imgsz,
         pretrain_epochs=args.pretrain_epochs,
@@ -254,27 +230,13 @@ def main() -> None:
 
     plan = plan_detector_training(config) if args.plan_only else train_detector(config)
     print(f"pretrain_best={plan.pretrain_weights}")
-    if plan.finetune_weights is not None:
-        print(f"finetune_best={plan.finetune_weights}")
-    print(f"detector_best={plan.final_weights}")
-    if plan.merged_dataset_yaml is not None:
-        print(f"merged_dataset={plan.merged_dataset_yaml}")
+    print(f"finetune_best={plan.finetune_weights}")
+    print(f"merged_dataset={plan.merged_dataset_yaml}")
 
 
 def _load_dataset_names(dataset_yaml: Path) -> list[str]:
     payload = load_yolo_dataset_config(dataset_yaml)
     return list(payload["names"])
-
-
-def _resolve_best_weights(results: object, *, fallback: Path | None) -> Path:
-    save_dir = getattr(results, "save_dir", None)
-    if save_dir is not None:
-        candidate = Path(save_dir) / "weights" / "best.pt"
-        if candidate.exists():
-            return candidate
-    if fallback is None:
-        raise FileNotFoundError("unable to resolve best.pt from Ultralytics results")
-    return fallback
 
 
 if __name__ == "__main__":

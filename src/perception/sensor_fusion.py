@@ -13,16 +13,14 @@ class FusedEntity:
     bbox_xywh: np.ndarray
     position_3d: np.ndarray
     velocity_3d: np.ndarray
+    heading_rad: float
     confidence: float
+    nearest_obstacle_distance_m: float | None
+    nearest_obstacle_centroid_xy: np.ndarray | None
+    ego_velocity_xyz_mps: np.ndarray
 
 
 class SensorFusion:
-    """Fuse depth-enhanced tracks from RGB-D camera into FusedEntity objects.
-
-    LiDAR and IMU have been removed; obstacle proximity and ego-motion
-    estimation are no longer available at this layer.
-    """
-
     def fuse(
         self,
         tracks: list[TrackState],
@@ -33,7 +31,11 @@ class SensorFusion:
                 bbox_xywh=track.bbox_xywh.copy(),
                 position_3d=track.position_3d.copy(),
                 velocity_3d=track.velocity_3d.copy(),
+                heading_rad=0.0,
                 confidence=track.confidence,
+                nearest_obstacle_distance_m=None,
+                nearest_obstacle_centroid_xy=None,
+                ego_velocity_xyz_mps=np.zeros(3, dtype=np.float32),
             )
             for track in tracks
         ]

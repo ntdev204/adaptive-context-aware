@@ -9,17 +9,25 @@ from typing import Any, Protocol
 import numpy as np
 
 from src.runtime.tensorrt_engine import TensorRTEngineRunner
+from src.utils.constants import FRAME_HEIGHT, FRAME_WIDTH
 
 PERSON_CLASS_ID = 0.0
-MODEL_INPUT_SHAPE = (1, 3, 480, 640)
+MODEL_INPUT_SHAPE = (1, 3, FRAME_HEIGHT, FRAME_WIDTH)
+
+
+def _empty_detections() -> np.ndarray:
+    """Return a fresh empty detections array with shape ``[0, 6]``."""
+    return np.zeros((0, 6), dtype=np.float32)
 
 
 @dataclass(slots=True)
 class DetectorConfig:
     backend: str = "engine"
+    """One of: ``"engine"`` (TensorRT), ``"synthetic"``."""
     confidence_threshold: float = 0.25
     annotation_dir: Path | None = None
     engine_path: Path | None = None
+    """Path to ``.engine`` file (engine backend). Falls back to ``CTX_ENGINE_MODEL_PATH`` env var."""
 
 
 @dataclass(slots=True)
@@ -38,15 +46,22 @@ class DetectorRuntime(Protocol):
 
 
 class PersonDetector:
-    """Engine-only detector contract for the adaptive runtime."""
+    """Multi-backend person detector.
+
+    Supported backends (set via ``DetectorConfig.backend``):
+
+    * ``"engine"``    – TensorRT ``.engine`` file via :class:`TensorRTEngineRunner`
+                        (optimised for Jetson / CUDA devices).
+    * ``"synthetic"`` – JSON annotation files used for offline unit tests.
+    """
 
     def __init__(self, config: DetectorConfig | None = None, runtime: DetectorRuntime | None = None) -> None:
         self.config = config or DetectorConfig()
         self._runtime = runtime
 
     def preprocess(self, frame_bgr: np.ndarray) -> np.ndarray:
-        if frame_bgr.shape != (480, 640, 3):
-            raise ValueError("expected BGR frame with shape (480, 640, 3)")
+        if frame_bgr.shape != (FRAME_HEIGHT, FRAME_WIDTH, 3):
+            raise ValueError(f"expected BGR frame with shape ({FRAME_HEIGHT}, {FRAME_WIDTH}, 3)")
         if frame_bgr.dtype != np.uint8:
             raise ValueError("expected uint8 BGR frame")
 
@@ -54,12 +69,15 @@ class PersonDetector:
         return chw[np.newaxis, ...]
 
     def detect(self, frame_bgr: np.ndarray, frame_id: int | None = None) -> DetectorResult:
-        input_batch = self.preprocess(frame_bgr)
+        # --- synthetic backend ---
         if self.config.backend == "synthetic":
             return DetectorResult(
                 detections=self._infer_synthetic(frame_id),
                 backend=self.config.backend,
             )
+
+        # --- engine (TensorRT) backend ---
+        input_batch = self.preprocess(frame_bgr)
         try:
             raw_output = self._get_runtime().run(input_batch)
         except FileNotFoundError:
@@ -68,6 +86,10 @@ class PersonDetector:
             raise TensorRTInferenceUnavailableError(f"TensorRT detector inference failed: {exc}") from exc
         detections = self._postprocess(raw_output, frame_shape=frame_bgr.shape)
         return DetectorResult(detections=self._filter_person_class(detections), backend=self.config.backend)
+
+    # ------------------------------------------------------------------
+    # Engine (TensorRT) backend helpers
+    # ------------------------------------------------------------------
 
     def _engine_path(self) -> Path:
         if self.config.engine_path is not None:
@@ -82,13 +104,17 @@ class PersonDetector:
             self._runtime = TensorRTEngineRunner(engine_path, ("images",))
         return self._runtime
 
+    # ------------------------------------------------------------------
+    # Synthetic backend helper
+    # ------------------------------------------------------------------
+
     def _infer_synthetic(self, frame_id: int | None) -> np.ndarray:
         if self.config.annotation_dir is None or frame_id is None:
-            return np.zeros((0, 6), dtype=np.float32)
+            return _empty_detections()
 
         annotation_path = self.config.annotation_dir / f"frame_{frame_id:03d}.json"
         if not annotation_path.exists():
-            return np.zeros((0, 6), dtype=np.float32)
+            return _empty_detections()
 
         with annotation_path.open("r", encoding="utf-8") as handle:
             payload: dict[str, Any] = json.load(handle)
@@ -110,8 +136,12 @@ class PersonDetector:
                 ]
             )
         if not detections:
-            return np.zeros((0, 6), dtype=np.float32)
+            return _empty_detections()
         return np.asarray(detections, dtype=np.float32)
+
+    # ------------------------------------------------------------------
+    # Shared postprocessing (engine backend)
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _filter_person_class(detections: np.ndarray) -> np.ndarray:
@@ -123,7 +153,7 @@ class PersonDetector:
     def _postprocess(self, raw_output: np.ndarray, frame_shape: tuple[int, int, int]) -> np.ndarray:
         output = np.asarray(raw_output, dtype=np.float32)
         if output.size == 0:
-            return np.zeros((0, 6), dtype=np.float32)
+            return _empty_detections()
 
         if output.ndim == 3 and output.shape[0] == 1:
             output = output[0]
@@ -142,7 +172,7 @@ class PersonDetector:
         confidence_mask = output[:, 4] >= self.config.confidence_threshold
         detections = output[confidence_mask].copy()
         if detections.size == 0:
-            return np.zeros((0, 6), dtype=np.float32)
+            return _empty_detections()
 
         xyxy_mask = (detections[:, 2] > detections[:, 0]) & (detections[:, 3] > detections[:, 1])
         detections[xyxy_mask, 2] -= detections[xyxy_mask, 0]
@@ -156,7 +186,7 @@ class PersonDetector:
         confidences = np.max(class_scores, axis=1)
         keep = (class_ids == PERSON_CLASS_ID) & (confidences >= self.config.confidence_threshold)
         if not np.any(keep):
-            return np.zeros((0, 6), dtype=np.float32)
+            return _empty_detections()
 
         boxes_xywh = boxes_xywh[keep].copy()
         boxes_xywh[:, 0] -= boxes_xywh[:, 2] / 2.0

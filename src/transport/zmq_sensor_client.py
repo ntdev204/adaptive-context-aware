@@ -9,21 +9,17 @@ from .messages import SensorMessage, SensorMessageCodec
 
 @dataclass(frozen=True, slots=True)
 class ZmqSensorClientConfig:
-    adaptive_host: str = "127.0.0.1"
-    adaptive_port: int = 5555
+    jetson_host: str = "127.0.0.1"
+    jetson_port: int = 5555
     high_water_mark: int = 1
-    jetson_host: str | None = None
-    jetson_port: int | None = None
 
     @property
     def endpoint(self) -> str:
-        host = self.jetson_host or self.adaptive_host
-        port = self.jetson_port or self.adaptive_port
-        return f"tcp://{host}:{port}"
+        return f"tcp://{self.jetson_host}:{self.jetson_port}"
 
 
 class ZmqSensorClient:
-    """Raspberry Pi-side PUSH client for sensor status packets."""
+    """Raspberry Pi-side PUSH client for LiDAR/IMU packets."""
 
     def __init__(self, config: ZmqSensorClientConfig, context: zmq.Context | None = None) -> None:
         self.config = config

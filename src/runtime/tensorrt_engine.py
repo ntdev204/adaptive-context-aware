@@ -13,7 +13,7 @@ class EngineRunner(Protocol):
 
 
 class TensorRTEngineRunner:
-    """Load TensorRT `.engine` artifacts produced for the target adaptive runtime."""
+    """Load TensorRT `.engine` artifacts produced for the target Jetson runtime."""
 
     def __init__(self, engine_path: Path, input_names: tuple[str, ...] = ()) -> None:
         if not engine_path.exists():

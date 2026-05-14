@@ -124,7 +124,7 @@ class SoHTelemetrySender:
         ram_used_mb: float,
         battery_v: float,
         motor_current_a: float,
-        camera_ok: int,
+        lidar_ok: int,
         motor_ok: int,
         uptime_s: int,
         reserved: int = 0,
@@ -136,7 +136,7 @@ class SoHTelemetrySender:
             ram_used_mb=ram_used_mb,
             battery_v=battery_v,
             motor_current_a=motor_current_a,
-            camera_ok=camera_ok,
+            lidar_ok=lidar_ok,
             motor_ok=motor_ok,
             reserved=reserved,
             uptime_s=uptime_s,
@@ -170,16 +170,20 @@ class SoHTelemetryDaemon:
         sender = SoHTelemetrySender(self.host, self.port)
         seq = 0
         while not self._stop_event.is_set():
-            payload = self.payload_factory() if self.payload_factory is not None else {
-                "cpu_temp_c": 0.0,
-                "cpu_util_pct": 0.0,
-                "ram_used_mb": 0.0,
-                "battery_v": 0.0,
-                "motor_current_a": 0.0,
-                "camera_ok": 1,
-                "motor_ok": 1,
-                "uptime_s": 0,
-            }
+            payload = (
+                self.payload_factory()
+                if self.payload_factory is not None
+                else {
+                    "cpu_temp_c": 0.0,
+                    "cpu_util_pct": 0.0,
+                    "ram_used_mb": 0.0,
+                    "battery_v": 0.0,
+                    "motor_current_a": 0.0,
+                    "lidar_ok": 1,
+                    "motor_ok": 1,
+                    "uptime_s": 0,
+                }
+            )
             sender.send_once(seq=seq, **payload)
             seq += 1
             self._stop_event.wait(self.interval_s)
@@ -327,11 +331,15 @@ class HeartbeatClientDaemon:
 
     def _heartbeat_loop(self) -> None:
         while not self._stop_event.is_set():
-            payload = self.heartbeat_payload_factory() if self.heartbeat_payload_factory is not None else {
-                "state": int(SafetyState.NORMAL),
-                "pipeline_fps": 0.0,
-                "gpu_temp_c": 0,
-            }
+            payload = (
+                self.heartbeat_payload_factory()
+                if self.heartbeat_payload_factory is not None
+                else {
+                    "state": int(SafetyState.NORMAL),
+                    "pipeline_fps": 0.0,
+                    "gpu_temp_c": 0,
+                }
+            )
             self.send_heartbeat(
                 state=SafetyState(int(payload["state"])),
                 pipeline_fps=float(payload["pipeline_fps"]),
@@ -374,6 +382,6 @@ class _DatagramReader:
     def read(self, size: int) -> bytes:
         if self._offset >= len(self._payload):
             return b""
-        chunk = self._payload[self._offset:self._offset + size]
+        chunk = self._payload[self._offset : self._offset + size]
         self._offset += len(chunk)
         return chunk

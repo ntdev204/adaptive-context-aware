@@ -232,7 +232,7 @@ def run_perception_benchmark(frames: int = 100) -> dict[str, object]:
     fps = 1000.0 * frames / max(total_ms, 1e-6)
     peak_rss_mb = 256.0 + entity_count * 0.5
     report = {
-            "device": "robot-laptop-simulated",
+        "device": "robot-laptop-simulated",
         "date": total_start.isoformat(),
         "pipeline": {
             "fps": {

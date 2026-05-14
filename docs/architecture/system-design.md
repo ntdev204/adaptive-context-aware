@@ -1,6 +1,6 @@
 # System Design: Adaptive Context-Aware Perception
 
-> Robot di động Mecanum 4 bánh — Laptop adaptive runtime + Raspberry Pi 4
+> Robot di động Mecanum 4 bánh — Jetson Orin Nano 8GB + Raspberry Pi 4
 
 ---
 
@@ -11,7 +11,7 @@
 │                    ROBOT HARDWARE                        │
 │                                                         │
 │  ┌──────────────┐  TCP/UDP   ┌────────────────────────┐ │
-│  │ Raspberry Pi 4│◄────────►│  Laptop Runtime        │ │
+│  │ Raspberry Pi 4│◄────────►│  Jetson Orin Nano 8GB  │ │
 │  │              │           │                        │ │
 │  │ • LiDAR drv  │           │ • RGB-D Camera         │ │
 │  │ • Motor ctrl │           │ • IMU                  │ │

@@ -13,6 +13,7 @@ dependencies = [
     "numpy>=1.26.0",
     "protobuf>=5.27.0",
     "pydantic>=2.7.0",
+    "pillow>=10.0.0",
     "pyyaml>=6.0.1",
     "pyzmq>=26.0.0",
     "uvicorn[standard]>=0.30.0",
@@ -25,7 +26,7 @@ dev = [
     "pytest>=8.2.0",
 ]
 engine = [
-    # TensorRT / torch-tensorrt / CUDA Python bindings are provided by the target runtime image.
+    # TensorRT / torch-tensorrt / CUDA Python bindings are provided by the Jetson runtime image.
     "ultralytics>=8.3.0",
 ]
 

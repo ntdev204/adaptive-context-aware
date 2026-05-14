@@ -9,9 +9,11 @@ from src.comm.protocol import (
     decode_packet,
     encode_packet,
     pack_heartbeat,
+    pack_lidar_scan,
     pack_nav_cmd,
     pack_soh,
     unpack_heartbeat,
+    unpack_lidar_scan,
     unpack_nav_cmd,
     unpack_soh,
 )
@@ -31,6 +33,16 @@ def test_nav_cmd_roundtrip() -> None:
     assert math.isclose(values["omega"], 1.0, rel_tol=1e-6)
 
 
+def test_lidar_roundtrip() -> None:
+    payload = pack_lidar_scan([(0.0, 1.2), (1.57, 2.4)])
+    packet = encode_packet(MsgType.LIDAR_SCAN, seq=1, payload=payload)
+    decoded = decode_packet(packet)
+    values = unpack_lidar_scan(decoded.payload)
+    assert values["num_points"] == 2
+    points = values["points"]
+    assert points[0] == pytest.approx((0.0, 1.2))
+    assert points[1] == pytest.approx((1.57, 2.4))
+
 
 def test_crc_rejects_corruption() -> None:
     packet = bytearray(encode_packet(MsgType.HEARTBEAT, seq=1, payload=pack_heartbeat(0, 21.0, 64)))
@@ -48,6 +60,6 @@ def test_heartbeat_roundtrip() -> None:
 def test_soh_roundtrip() -> None:
     payload = pack_soh(55.0, 12.0, 1024.0, 24.0, 3.0, 1, 1, 0, 99)
     values = unpack_soh(payload)
-    assert values["camera_ok"] == 1
+    assert values["lidar_ok"] == 1
     assert values["motor_ok"] == 1
     assert values["uptime_s"] == 99

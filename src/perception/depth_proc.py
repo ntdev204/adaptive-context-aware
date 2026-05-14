@@ -4,6 +4,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from src.utils.constants import DEPTH_SHAPE_HW
+from src.utils.validation import validate_ndarray
+
 
 @dataclass(slots=True)
 class CameraIntrinsics:
@@ -62,10 +65,12 @@ class DepthProcessor:
 
     @staticmethod
     def _validate_depth_map(depth_map_m: np.ndarray) -> None:
-        if depth_map_m.shape != (480, 640):
-            raise ValueError("expected depth map shape (480, 640)")
-        if depth_map_m.dtype != np.float32:
-            raise ValueError("expected depth map dtype float32")
+        validate_ndarray(
+            depth_map_m,
+            expected_shape=DEPTH_SHAPE_HW,
+            expected_dtype=np.float32,
+            name="depth_map",
+        )
 
     @staticmethod
     def _validate_detections(detections: np.ndarray) -> None:

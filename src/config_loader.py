@@ -4,29 +4,22 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 class NetworkConfig(BaseModel):
-    adaptive_host: str
-    jetson_host: str | None = None
+    jetson_host: str
     pi_host: str
+    lidar_port: int = Field(ge=1, le=65535)
     nav_port: int = Field(ge=1, le=65535)
     soh_port: int = Field(ge=1, le=65535)
     heartbeat_port: int = Field(ge=1, le=65535)
     sensor_ingest_port: int = Field(ge=1, le=65535)
     result_publish_port: int = Field(ge=1, le=65535)
 
-    @model_validator(mode="before")
-    @classmethod
-    def _accept_legacy_jetson_host(cls, value: object) -> object:
-        if isinstance(value, dict) and "adaptive_host" not in value and "jetson_host" in value:
-            value = {**value, "adaptive_host": value["jetson_host"]}
-        return value
-
     @property
     def runtime_host(self) -> str:
-        return self.adaptive_host
+        return self.jetson_host
 
 
 class SafetyConfig(BaseModel):

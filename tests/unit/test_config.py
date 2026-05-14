@@ -6,9 +6,10 @@ from config import load_config
 def test_load_config() -> None:
     config = load_config("dev")
     assert config.environment == "dev"
-    assert config.network.adaptive_host == "127.0.0.1"
+    assert config.network.jetson_host == "127.0.0.1"
     assert config.network.runtime_host == "127.0.0.1"
     assert config.network.pi_host == "25.12.4.101"
+    assert config.network.lidar_port == 9090
     assert config.network.sensor_ingest_port == 5555
     assert config.network.result_publish_port == 5556
     assert config.camera.rgb_device == "/dev/video0"

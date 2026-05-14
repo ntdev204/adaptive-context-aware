@@ -1,0 +1,51 @@
+{
+  "tracker_type": "bot-sort-compatible-heuristic",
+  "mot20_dir": "data/fine_tuning/mot20",
+  "hallway_rgbdt_dir": "data/fine_tuning/hallway_rgbdt",
+  "evaluated_sequences": {
+    "mot20": [
+      "MOT20-01",
+      "MOT20-02",
+      "MOT20-03",
+      "MOT20-05"
+    ],
+    "hallway_rgbdt": [
+      "20141008_141323_00",
+      "20141008_141430_00",
+      "20141008_141537_00",
+      "20141008_141749_00"
+    ]
+  },
+  "best_score": 0.6944918414783611,
+  "config": {
+    "iou_threshold": 0.4,
+    "depth_gate_m": 1.2,
+    "max_missed_frames": 4
+  },
+  "candidates": [
+    {
+      "config": {
+        "iou_threshold": 0.2,
+        "depth_gate_m": 0.8,
+        "max_missed_frames": 2
+      },
+      "score": 0.6758387870058321
+    },
+    {
+      "config": {
+        "iou_threshold": 0.3,
+        "depth_gate_m": 1.0,
+        "max_missed_frames": 3
+      },
+      "score": 0.6848592289555115
+    },
+    {
+      "config": {
+        "iou_threshold": 0.4,
+        "depth_gate_m": 1.2,
+        "max_missed_frames": 4
+      },
+      "score": 0.6944918414783611
+    }
+  ]
+}

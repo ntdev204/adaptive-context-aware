@@ -4,17 +4,17 @@ import os
 
 from fastapi import FastAPI
 
-from src.runtime.controller import AdaptiveRuntimeController, RuntimeConfig, RuntimeStatus
+from src.runtime.controller import JetsonRuntimeController, RuntimeConfig, RuntimeStatus
 
 from .schemas import HealthResponse, RuntimeConfigResponse, RuntimeControlResponse, RuntimeMetricsResponse
 
 
-def create_app(controller: AdaptiveRuntimeController | None = None) -> FastAPI:
-    runtime = controller or AdaptiveRuntimeController(_load_runtime_config())
+def create_app(controller: JetsonRuntimeController | None = None) -> FastAPI:
+    runtime = controller or JetsonRuntimeController(_load_runtime_config())
     app = FastAPI(
-        title="Adaptive Context Aware Control API",
+        title="Jetson Context Aware Control API",
         version="1.0.0",
-        description="Control plane for the laptop adaptive runtime. Frame and sensor data use ZMQ/protobuf data plane.",
+        description="Control plane for the Jetson runtime. Frame and sensor data use ZMQ/protobuf data plane.",
     )
     app.state.runtime = runtime
 
@@ -29,12 +29,12 @@ def create_app(controller: AdaptiveRuntimeController | None = None) -> FastAPI:
     @app.get("/config", response_model=RuntimeConfigResponse)
     def config() -> RuntimeConfigResponse:
         runtime_config = runtime.config
-        adaptive_host = runtime_config.bind_host
+        jetson_host = runtime_config.jetson_host
         return RuntimeConfigResponse(
-            adaptive_host=adaptive_host,
+            jetson_host=jetson_host,
             pi_host=runtime_config.pi_host,
-            sensor_ingest_endpoint=f"tcp://{adaptive_host}:{runtime_config.sensor_ingest_port}",
-            result_publish_endpoint=f"tcp://{adaptive_host}:{runtime_config.result_publish_port}",
+            sensor_ingest_endpoint=f"tcp://{jetson_host}:{runtime_config.sensor_ingest_port}",
+            result_publish_endpoint=f"tcp://{jetson_host}:{runtime_config.result_publish_port}",
             heartbeat_endpoint=f"tcp://{runtime_config.pi_host}:{runtime_config.heartbeat_port}",
             engine_path=runtime_config.engine_path,
             camera_rgb_device=runtime_config.camera_rgb_device,
@@ -73,7 +73,7 @@ def create_app(controller: AdaptiveRuntimeController | None = None) -> FastAPI:
 
 def _load_runtime_config() -> RuntimeConfig:
     return RuntimeConfig(
-        adaptive_host=os.environ.get("CTX_ADAPTIVE_HOST", os.environ.get("CTX_JETSON_HOST", "127.0.0.1")),
+        jetson_host=os.environ.get("CTX_JETSON_HOST", "127.0.0.1"),
         pi_host=os.environ.get("CTX_PI_HOST", "25.12.4.101"),
         sensor_ingest_port=int(os.environ.get("CTX_SENSOR_INGEST_PORT", "5555")),
         result_publish_port=int(os.environ.get("CTX_RESULT_PUBLISH_PORT", "5556")),

@@ -4,6 +4,13 @@ from enum import IntEnum, StrEnum
 
 
 class Activity(StrEnum):
+    """String-based activity labels for serialization.
+
+    .. deprecated::
+        Prefer :class:`src.decision.intent_predictor.ActivityClass` (IntEnum)
+        for inference code. This StrEnum remains for config / logging only.
+    """
+
     WALKING = "WALKING"
     RUNNING = "RUNNING"
     STANDING = "STANDING"
@@ -25,6 +32,13 @@ class SceneContext(StrEnum):
 
 
 class IntentDirection(StrEnum):
+    """String-based direction labels for serialization.
+
+    .. deprecated::
+        Prefer :class:`src.decision.intent_predictor.IntentDirection` (IntEnum)
+        for inference code. This StrEnum remains for config / logging only.
+    """
+
     NORTH = "NORTH"
     NE = "NE"
     EAST = "EAST"
@@ -61,7 +75,6 @@ class EStopReason(IntEnum):
 
 
 class EStopSource(IntEnum):
-    ADAPTIVE_RUNTIME = 0x01
     JETSON_AI = 0x01
     RPI_WATCHDOG = 0x02
     HARDWARE = 0x03

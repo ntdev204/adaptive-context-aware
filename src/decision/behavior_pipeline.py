@@ -6,6 +6,7 @@ import numpy as np
 
 from src.perception.sensor_fusion import FusedEntity
 from src.reasoning.brain_pipeline import BrainPipelineResult
+from src.utils.constants import UNIFIED_REASONING_DIM
 
 from .anomaly_detector import AnomalyDetection, AnomalyDetector
 from .intent_predictor import IntentPrediction, IntentPredictor
@@ -68,7 +69,7 @@ class BehaviorDecisionPipeline:
         if unified_output is None:
             raise ValueError("unified_output is required")
         fused = np.asarray(unified_output, dtype=np.float32)
-        if fused.ndim != 2 or fused.shape[1] != 256:
+        if fused.ndim != 2 or fused.shape[1] != UNIFIED_REASONING_DIM:
             raise ValueError("unified_output must have shape [B, 256]")
         if entity_count <= 0:
             return fused

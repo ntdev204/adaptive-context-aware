@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import BinaryIO, Iterable
 
-MAGIC = b"\xCA\xFE"
+MAGIC = b"\xca\xfe"
 HEADER_FORMAT = "!2s B I Q I"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 CRC_FORMAT = "!H"
@@ -21,6 +21,7 @@ ACK_FORMAT = "!B I B H"
 
 
 class MsgType(IntEnum):
+    LIDAR_SCAN = 0x01
     NAV_CMD = 0x02
     HEARTBEAT = 0x03
     ESTOP = 0x04
@@ -67,7 +68,7 @@ def decode_packet(raw: bytes) -> Packet:
     expected_size = HEADER_SIZE + payload_len + CRC_SIZE
     if len(raw) != expected_size:
         raise ValueError("packet length mismatch")
-    payload = raw[HEADER_SIZE:HEADER_SIZE + payload_len]
+    payload = raw[HEADER_SIZE : HEADER_SIZE + payload_len]
     (crc_received,) = struct.unpack(CRC_FORMAT, raw[-CRC_SIZE:])
     crc_expected = crc16_ccitt(raw[:-CRC_SIZE])
     if crc_received != crc_expected:
@@ -125,7 +126,7 @@ def pack_soh(
     ram_used_mb: float,
     battery_v: float,
     motor_current_a: float,
-    camera_ok: int,
+    lidar_ok: int,
     motor_ok: int,
     reserved: int,
     uptime_s: int,
@@ -138,7 +139,7 @@ def pack_soh(
         ram_used_mb,
         battery_v,
         motor_current_a,
-        camera_ok,
+        lidar_ok,
         motor_ok,
         reserved,
         uptime_s,
@@ -154,7 +155,7 @@ def unpack_soh(payload: bytes) -> dict[str, float | int]:
         "ram_used_mb",
         "battery_v",
         "motor_current_a",
-        "camera_ok",
+        "lidar_ok",
         "motor_ok",
         "reserved",
         "uptime_s",
@@ -181,4 +182,25 @@ def unpack_ack(payload: bytes) -> dict[str, int]:
     return {"ack_msg_type": ack_msg_type, "ack_seq": ack_seq, "status": status, "reserved": reserved}
 
 
+def pack_lidar_scan(points: Iterable[tuple[float, float]]) -> bytes:
+    point_list = list(points)
+    payload = struct.pack("!I", len(point_list))
+    for angle_rad, distance_m in point_list:
+        payload += struct.pack("!f f", angle_rad, distance_m)
+    return payload
 
+
+def unpack_lidar_scan(payload: bytes) -> dict[str, object]:
+    if len(payload) < 4:
+        raise ValueError("lidar payload too short")
+    (num_points,) = struct.unpack("!I", payload[:4])
+    expected = 4 + num_points * 8
+    if len(payload) != expected:
+        raise ValueError("lidar payload length mismatch")
+    points: list[tuple[float, float]] = []
+    offset = 4
+    for _ in range(num_points):
+        angle_rad, distance_m = struct.unpack("!f f", payload[offset : offset + 8])
+        points.append((angle_rad, distance_m))
+        offset += 8
+    return {"num_points": num_points, "points": points}

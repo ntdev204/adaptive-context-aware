@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    APP_HOME=/app
+
+ARG INSTALL_ENGINE=0
+ARG INSTALL_VIDEO=0
+
+WORKDIR ${APP_HOME}
+
+COPY src ./src
+COPY config ./config
+
+RUN pip install --no-cache-dir h5py jsonschema numpy pillow pyyaml && \
+    if [ "${INSTALL_VIDEO}" = "1" ]; then pip install --no-cache-dir opencv-python-headless; fi && \
+    if [ "${INSTALL_ENGINE}" = "1" ]; then pip install --no-cache-dir ultralytics; fi
+
+CMD ["python", "pipelines/generate_synthetic_h5.py"]

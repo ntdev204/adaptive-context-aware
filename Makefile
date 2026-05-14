@@ -5,7 +5,7 @@ DOCKER ?= docker
 COMPOSE ?= $(DOCKER) compose -f docker/docker-compose.yml
 
 .PHONY: help install install-dev test test-unit lint fixtures fixtures-download benchmark-ci benchmark-laptop benchmark-jetson baseline-update \
-	docker-build-dev docker-build-test docker-build-prod compose-config compose-up compose-down run clean
+	docker-build-dev docker-build-test docker-build-prod build-engine compose-config compose-up compose-down run clean
 
 help:
 	@echo "Available targets:"
@@ -22,6 +22,7 @@ help:
 	@echo "  docker-build-dev   Build development image"
 	@echo "  docker-build-test  Build test image"
 	@echo "  docker-build-prod  Build production image"
+	@echo "  build-engine       Export best.pt → TensorRT .engine (requires --gpus all)"
 	@echo "  compose-config     Validate docker compose config"
 	@echo "  compose-up         Start compose services"
 	@echo "  compose-down       Stop compose services"
@@ -68,11 +69,14 @@ docker-build-test:
 docker-build-prod:
 	$(DOCKER) build -f docker/Dockerfile.prod -t ctx-aware:prod .
 
+build-engine:
+	$(DOCKER) build -f docker/Dockerfile.engine -t ctx-aware:engine .
+
 compose-config:
 	$(COMPOSE) config
 
 compose-up:
-	$(COMPOSE) up --build
+	$(COMPOSE) up --build -d
 
 compose-down:
 	$(COMPOSE) down

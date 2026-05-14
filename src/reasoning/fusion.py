@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from src.router.adaptive_router import ReasoningPathway
+from src.utils.constants import UNIFIED_REASONING_DIM
 
 from .runtime import PathwayRuntime, RuntimeFactory, TensorRTEngineRuntime, as_float32_array
 
@@ -19,7 +20,7 @@ class GatedFusionInference:
         ReasoningPathway.GNN: 256,
     }
     PATHWAY_ORDER = tuple(PATHWAY_DIMS)
-    OUTPUT_DIM = 256
+    OUTPUT_DIM = UNIFIED_REASONING_DIM
 
     def __init__(
         self,
@@ -68,8 +69,7 @@ class GatedFusionInference:
             raise ValueError("fusion requires at least one active pathway")
 
         normalized_outputs = {
-            self._coerce_pathway(name): as_float32_array(values)
-            for name, values in pathway_outputs.items()
+            self._coerce_pathway(name): as_float32_array(values) for name, values in pathway_outputs.items()
         }
         sample = next(iter(normalized_outputs.values()))
         batch_size = self._validate_output(sample, expected_dim=sample.shape[-1])

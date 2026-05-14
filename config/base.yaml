@@ -1,6 +1,7 @@
 network:
-  adaptive_host: 127.0.0.1
+  jetson_host: 127.0.0.1
   pi_host: 25.12.4.101
+  lidar_port: 9090
   nav_port: 9091
   soh_port: 9092
   heartbeat_port: 9093
