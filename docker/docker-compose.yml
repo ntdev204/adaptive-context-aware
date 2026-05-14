@@ -4,8 +4,9 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.prod
     environment:
-      CTX_ASTRAS_DEPTH_DEVICE: /dev/video1
-      CTX_ASTRAS_RGB_DEVICE: /dev/video0
+      CTX_CAMERA_BACKEND: openni
+      CTX_ASTRAS_DEPTH_DEVICE: ""
+      CTX_ASTRAS_RGB_DEVICE: ""
       CTX_RUNTIME_ROLE: control-api
       CTX_JETSON_HOST: 25.12.4.100
       CTX_PI_HOST: 25.12.4.101
@@ -16,9 +17,9 @@ services:
     volumes:
       - ctx-aware-engines:/app/models/engines
     devices:
-      - /dev/video0:/dev/video0
-      - /dev/video1:/dev/video1
+      - /dev/bus/usb:/dev/bus/usb
     network_mode: host
+    privileged: true
     command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8080"]
 
   dev-control-api:
@@ -26,8 +27,9 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.dev
     environment:
-      CTX_ASTRAS_DEPTH_DEVICE: /dev/video1
-      CTX_ASTRAS_RGB_DEVICE: /dev/video0
+      CTX_CAMERA_BACKEND: openni
+      CTX_ASTRAS_DEPTH_DEVICE: ""
+      CTX_ASTRAS_RGB_DEVICE: ""
       CTX_RUNTIME_ROLE: dev-control-api
       CTX_JETSON_HOST: 127.0.0.1
       CTX_PI_HOST: 127.0.0.2
@@ -44,8 +46,8 @@ services:
       - "5555:5555"
       - "5556:5556"
     devices:
-      - /dev/video0:/dev/video0
-      - /dev/video1:/dev/video1
+      - /dev/bus/usb:/dev/bus/usb
+    privileged: true
     command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8080"]
 
   monitor:

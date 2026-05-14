@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -62,6 +63,7 @@ class JetsonRuntimeController:
         self._reason: str | None = None
         self._camera = AstraSCameraRuntime(
             AstraSCameraConfig(
+                backend=os.environ.get("CTX_CAMERA_BACKEND", "v4l2"),
                 rgb_device=self.config.camera_rgb_device,
                 depth_device=self.config.camera_depth_device,
                 width=self.config.camera_width,

@@ -3,12 +3,17 @@ FROM python:3.11-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_HOME=/app \
+    CTX_CAMERA_BACKEND=openni \
     CTX_ASTRAS_RGB_DEVICE=/dev/video0 \
     CTX_ASTRAS_DEPTH_DEVICE=/dev/video1 \
     CTX_JETSON_HOST=127.0.0.1 \
     CTX_PI_HOST=127.0.0.2 \
     CTX_RESULT_PUBLISH_PORT=5556 \
-    CTX_SENSOR_INGEST_PORT=5555
+    CTX_SENSOR_INGEST_PORT=5555 \
+    OPENNI_SDK_ROOT=/opt/orbbec/openni \
+    LD_LIBRARY_PATH=/opt/orbbec/openni/lib:/opt/orbbec/openni/Redist:${LD_LIBRARY_PATH}
+
+ARG OPENNI_SDK_URL=https://dl.orbbec3d.com/dist/openni2/v2.3.0.86-beta6/Orbbec_OpenNI_v2.3.0.86-beta6_linux_release.zip
 
 WORKDIR ${APP_HOME}
 
@@ -18,8 +23,18 @@ RUN apt-get -o Acquire::Retries=5 update && apt-get install -y --no-install-reco
     curl \
     git \
     libgl1 \
+    libusb-1.0-0 \
     libglib2.0-0 \
+    unzip \
+    wget \
     && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /opt/orbbec && \
+    wget -O /tmp/openni.zip "${OPENNI_SDK_URL}" && \
+    unzip -q /tmp/openni.zip -d /opt/orbbec && \
+    sdk_dir="$(find /opt/orbbec -maxdepth 1 -type d -name 'Orbbec_OpenNI_*' | head -n 1)" && \
+    mv "${sdk_dir}" "${OPENNI_SDK_ROOT}" && \
+    rm -f /tmp/openni.zip
 
 COPY pyproject.toml ./
 COPY src ./src
