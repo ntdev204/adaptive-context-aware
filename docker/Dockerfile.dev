@@ -1,25 +1,56 @@
-FROM python:3.11-slim
+ARG L4T_TAG=r36.4.0
+FROM dustynv/l4t-pytorch:${L4T_TAG}
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
+ENV PIP_INDEX_URL=https://pypi.org/simple \
+    PIP_EXTRA_INDEX_URL=https://pypi.org/simple \
+    PIP_RETRIES=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_HOME=/app \
-    CTX_ASTRAS_RGB_DEVICE=/dev/video0 \
-    CTX_ASTRAS_DEPTH_DEVICE=/dev/video1 \
+    CTX_CAMERA_BACKEND=openni \
+    CTX_ASTRAS_RGB_DEVICE= \
+    CTX_ASTRAS_DEPTH_DEVICE= \
     CTX_JETSON_HOST=127.0.0.1 \
     CTX_PI_HOST=127.0.0.2 \
     CTX_RESULT_PUBLISH_PORT=5556 \
-    CTX_SENSOR_INGEST_PORT=5555
+    CTX_SENSOR_INGEST_PORT=5555 \
+    CTX_HEARTBEAT_PORT=9093 \
+    CTX_HEARTBEAT_INTERVAL_MS=500 \
+    CTX_RUNTIME_BACKEND=engine \
+    OPENNI_SDK_ROOT=/opt/orbbec/openni \
+    YOLO_OFFLINE=True \
+    ULTRALYTICS_TELEMETRY=0 \
+    CUDA_MODULE_LOADING=LAZY \
+    LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/nvidia:/usr/lib/aarch64-linux-gnu/tegra:/opt/orbbec/openni/lib:/opt/orbbec/openni/Redist:${LD_LIBRARY_PATH}
 
 WORKDIR ${APP_HOME}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash \
-    build-essential \
-    curl \
     git \
-    libgl1 \
+    curl \
+    build-essential \
     libglib2.0-0 \
+    libgl1 \
+    libgomp1 \
+    libusb-1.0-0 \
+    libudev-dev \
+    usbutils \
+    python-is-python3 \
+    rsync \
+    openssh-client \
     && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /tmp/orbbec && \
+    curl -L https://github.com/orbbec/ros_astra_camera/archive/refs/heads/master.tar.gz \
+        | tar -xz -C /tmp/orbbec --strip-components=1 && \
+    mkdir -p /usr/lib/OpenNI2/Drivers /opt/orbbec/openni/lib /opt/orbbec/openni/Redist && \
+    cp /tmp/orbbec/include/openni2_redist/arm64/libOpenNI2.so /usr/lib/libOpenNI2.so && \
+    cp /tmp/orbbec/include/openni2_redist/arm64/libOpenNI2.so /opt/orbbec/openni/lib/libOpenNI2.so && \
+    cp -r /tmp/orbbec/include/openni2_redist/arm64/OpenNI2 /opt/orbbec/openni/Redist/ && \
+    cp -r /tmp/orbbec/include/openni2_redist/arm64/OpenNI2/Drivers/* /usr/lib/OpenNI2/Drivers/ && \
+    ldconfig && \
+    rm -rf /tmp/orbbec
 
 COPY pyproject.toml ./
 COPY src ./src
@@ -27,6 +58,11 @@ COPY config ./config
 COPY scripts ./scripts
 COPY tests ./tests
 
-RUN pip install --no-cache-dir -e .[dev]
+RUN pip install --upgrade "typing_extensions>=4.12.2,<5.0.0"
+RUN pip install -e .[engine]
+RUN pip install pytest pytest-asyncio pytest-mock ruff httpx jsonschema
+RUN pip install -e .[dev]
 
-CMD ["python", "-m", "src.main"]
+RUN mkdir -p /app/models/engines /app/logs /app/data
+
+CMD ["/bin/bash"]

@@ -1,18 +1,34 @@
-FROM python:3.11-slim
+ARG L4T_TAG=r36.4.0
+FROM dustynv/l4t-pytorch:${L4T_TAG}
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    APP_HOME=/app
+    APP_HOME=/app \
+    PIP_INDEX_URL=https://pypi.org/simple \
+    PIP_EXTRA_INDEX_URL=https://pypi.org/simple \
+    PIP_RETRIES=1 \
+    PIP_NO_CACHE_DIR=1 \
+    YOLO_OFFLINE=True \
+    ULTRALYTICS_TELEMETRY=0 \
+    CUDA_MODULE_LOADING=LAZY
 
 ARG INSTALL_ENGINE=0
 ARG INSTALL_VIDEO=0
 
 WORKDIR ${APP_HOME}
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml ./
 COPY src ./src
 COPY config ./config
+COPY pipelines ./pipelines
 
-RUN pip install --no-cache-dir h5py jsonschema numpy pillow pyyaml && \
+RUN pip install --upgrade "typing_extensions>=4.12.2,<5.0.0" && \
+    pip install --no-cache-dir h5py jsonschema numpy pillow pyyaml && \
     if [ "${INSTALL_VIDEO}" = "1" ]; then pip install --no-cache-dir opencv-python-headless; fi && \
     if [ "${INSTALL_ENGINE}" = "1" ]; then pip install --no-cache-dir ultralytics; fi
 

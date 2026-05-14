@@ -44,7 +44,9 @@ from src.utils.constants import DEPTH_SHAPE_HW
 from .depth_proc import CameraIntrinsics, DepthProcessor
 from .detector import DetectorConfig, PersonDetector
 from .feature_extractor import EntityFeatureExtractor
+from .imu_fusion import IMUFusion
 from .input_source import InputSource
+from .lidar_proc import LidarProcessor
 from .sensor_fusion import FusedEntity, SensorFusion
 from .tracker import MultiObjectTracker
 
@@ -71,6 +73,8 @@ class PerceptionPipeline:
         default_factory=lambda: DepthProcessor(CameraIntrinsics(fx=400.0, fy=400.0, cx=320.0, cy=240.0))
     )
     tracker: MultiObjectTracker = field(init=False)
+    lidar_processor: LidarProcessor = field(default_factory=LidarProcessor)
+    imu_fusion: IMUFusion = field(default_factory=IMUFusion)
     sensor_fusion: SensorFusion = field(default_factory=SensorFusion)
     feature_extractor: EntityFeatureExtractor = field(default_factory=EntityFeatureExtractor)
     tracker_config_path: str = "models/fine_tuning/botsort_tuned.json"
@@ -105,6 +109,9 @@ class PerceptionPipeline:
         self,
         frame_bgr: np.ndarray,
         depth_map_m: np.ndarray | None = None,
+        lidar_scan: np.ndarray | None = None,
+        accel_xyz_mps2: np.ndarray | None = None,
+        quat_xyzw: np.ndarray | None = None,
         timestamp_us: int = 0,
         frame_id: int | None = None,
         delta_time_s: float = 0.1,
@@ -140,7 +147,11 @@ class PerceptionPipeline:
         timings["tracker_ms"] = (perf_counter() - start) * 1000.0
 
         start = perf_counter()
-        fused = self.sensor_fusion.fuse(tracks)
+        ego_motion = None
+        if accel_xyz_mps2 is not None and quat_xyzw is not None:
+            ego_motion = self.imu_fusion.update(accel_xyz_mps2, quat_xyzw, timestamp_us)
+        lidar_clusters = self.lidar_processor.cluster_scan(lidar_scan) if lidar_scan is not None else []
+        fused = self.sensor_fusion.fuse(tracks, ego_motion, lidar_clusters)
         timings["fusion_ms"] = (perf_counter() - start) * 1000.0
 
         start = perf_counter()
@@ -178,6 +189,9 @@ class PerceptionPipeline:
             yield self.process(
                 frame_bgr,
                 depth_map_m=depth_map_m,
+                lidar_scan=None,
+                accel_xyz_mps2=None,
+                quat_xyzw=None,
                 timestamp_us=timestamp_us,
                 frame_id=frame_id,
                 delta_time_s=max(delta, 1e-6),

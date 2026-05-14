@@ -7,6 +7,7 @@ from .gated_fusion import GatedFusion
 from .gnn_pathway import GraphAttentionPathway
 from .gru_pathway import GruPathway
 from .intent_predictor import IntentPredictorNet
+from .rl_policy import RLPolicyNet
 from .tcn_pathway import TcnPathway
 
 __all__ = [
@@ -17,5 +18,6 @@ __all__ = [
     "GraphAttentionPathway",
     "GruPathway",
     "IntentPredictorNet",
+    "RLPolicyNet",
     "TcnPathway",
 ]

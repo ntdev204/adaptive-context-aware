@@ -20,16 +20,24 @@ if str(ROOT) not in sys.path:
 
 from src.perception.depth_proc import CameraIntrinsics, DepthProcessor  # noqa: E402
 from src.perception.tracker import MultiObjectTracker, TrackState  # noqa: E402
-from src.utils.hdf5_recorder import SessionMetadata  # noqa: E402
+from src.utils.hdf5_recorder import HDF5Recorder, SessionMetadata  # noqa: E402
 
 FRAME_HEIGHT = 480
 FRAME_WIDTH = 640
 DEFAULT_FPS = 30.0
 DEFAULT_BASE_TIMESTAMP_US = 1_715_000_000_000_000
 PERSON_CLASS_ID = 0.0
+DEFAULT_LIDAR_POINTS = 360
+MISSING_DEPTH_FRAME = np.full((FRAME_HEIGHT, FRAME_WIDTH), np.nan, dtype=np.float32)
+PROCESSING_DEPTH_FRAME = np.full((FRAME_HEIGHT, FRAME_WIDTH), 5.0, dtype=np.float32)
+MISSING_LIDAR_SCAN = np.full((DEFAULT_LIDAR_POINTS, 2), np.nan, dtype=np.float32)
+MISSING_IMU_ACCEL = np.full(3, np.nan, dtype=np.float32)
+MISSING_IMU_GYRO = np.full(3, np.nan, dtype=np.float32)
+MISSING_IMU_QUAT = np.full(4, np.nan, dtype=np.float32)
 
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 _VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv"}
+_H5_EXTENSIONS = {".h5", ".hdf5"}
 _ROBOFLOW_FRAME_RE = re.compile(r"(?P<clip>.+?_mp4)-(?P<frame>\d+)_jpg", re.IGNORECASE)
 
 
@@ -41,11 +49,11 @@ class DetectionProvider(Protocol):
 @dataclass(frozen=True, slots=True)
 class SyntheticH5Config:
     raw_dir: Path = Path("data/raw")
-    output_dir: Path = Path("data/synthetic_h5")
+    output_dir: Path = Path("data/synthetic")
     model_path: Path = Path("models/fine_tuning/best.pt")
     tracker_config_path: Path = Path("models/fine_tuning/botsort_tuned.json")
     source_kind: str = "all"
-    image_detection_source: str = "hybrid"
+    image_detection_source: str = "yolo"
     confidence_threshold: float = 0.25
     person_class_names: tuple[str, ...] = ("person", "nguoi")
     scene_context: str = "UNKNOWN"
@@ -80,6 +88,12 @@ class VideoSequence:
     source_path: Path
     fps: float
     stride: int
+
+
+@dataclass(frozen=True, slots=True)
+class H5Sequence:
+    name: str
+    source_path: Path
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,8 +283,8 @@ def generate_synthetic_h5_dataset(
     config: SyntheticH5Config = SyntheticH5Config(),
     detector: DetectionProvider | None = None,
 ) -> list[GeneratedH5Summary]:
-    if config.source_kind not in {"all", "images", "videos"}:
-        raise ValueError("source_kind must be one of: all, images, videos")
+    if config.source_kind not in {"all", "images", "videos", "h5"}:
+        raise ValueError("source_kind must be one of: all, images, videos, h5")
     if config.image_detection_source not in {"yolo", "labels", "hybrid"}:
         raise ValueError("image_detection_source must be one of: yolo, labels, hybrid")
     if config.video_stride < 1:
@@ -291,8 +305,11 @@ def generate_synthetic_h5_dataset(
         output_path = config.output_dir / f"{_slugify(sequence.name)}.h5"
         if output_path.exists() and not config.overwrite:
             raise FileExistsError(f"{output_path} already exists; pass --overwrite to replace it")
-        tracker = _load_tracker(config.tracker_config_path)
-        summary = _write_sequence(sequence, sequence_index, output_path, config, detector, tracker)
+        if isinstance(sequence, H5Sequence):
+            summary = _normalize_h5_sequence(sequence, output_path, config)
+        else:
+            tracker = _load_tracker(config.tracker_config_path)
+            summary = _write_sequence(sequence, sequence_index, output_path, config, detector, tracker)
         summaries.append(summary)
     return summaries
 
@@ -337,6 +354,22 @@ def discover_image_sequences(raw_dir: Path, *, fps: float = DEFAULT_FPS) -> list
                         fps=fps,
                     )
                 )
+    loose_image_dirs: dict[Path, list[FrameRef]] = {}
+    dataset_image_roots = {dataset_dir.resolve() for dataset_dir in dataset_dirs}
+    for image_path in sorted(path for path in raw_dir.rglob("*") if path.suffix.lower() in _IMAGE_EXTENSIONS):
+        if any(root in image_path.resolve().parents for root in dataset_image_roots):
+            continue
+        parent = image_path.parent
+        loose_image_dirs.setdefault(parent, []).append(FrameRef(path=image_path, source_frame_id=None))
+    for parent, frames in sorted(loose_image_dirs.items(), key=lambda item: str(item[0])):
+        sequences.append(
+            ImageSequence(
+                name=f"loose_images_{parent.name}",
+                source_path=parent,
+                frames=tuple(sorted(frames, key=lambda item: item.path.name)),
+                fps=fps,
+            )
+        )
     return sequences
 
 
@@ -347,12 +380,21 @@ def discover_video_sequences(raw_dir: Path, *, stride: int = 1) -> list[VideoSeq
     ]
 
 
-def _discover_sequences(config: SyntheticH5Config) -> list[ImageSequence | VideoSequence]:
-    sequences: list[ImageSequence | VideoSequence] = []
+def discover_h5_sequences(raw_dir: Path) -> list[H5Sequence]:
+    return [
+        H5Sequence(name=path.stem, source_path=path)
+        for path in sorted(path for path in raw_dir.rglob("*") if path.suffix.lower() in _H5_EXTENSIONS)
+    ]
+
+
+def _discover_sequences(config: SyntheticH5Config) -> list[ImageSequence | VideoSequence | H5Sequence]:
+    sequences: list[ImageSequence | VideoSequence | H5Sequence] = []
     if config.source_kind in {"all", "images"}:
         sequences.extend(discover_image_sequences(config.raw_dir, fps=config.fps))
     if config.source_kind in {"all", "videos"}:
         sequences.extend(discover_video_sequences(config.raw_dir, stride=config.video_stride))
+    if config.source_kind in {"all", "h5"}:
+        sequences.extend(discover_h5_sequences(config.raw_dir))
     if config.max_sequences is not None:
         sequences = sequences[: config.max_sequences]
     if not sequences:
@@ -369,11 +411,6 @@ def _write_sequence(
     tracker: MultiObjectTracker,
 ) -> GeneratedH5Summary:
     frame_iter = _iter_sequence_frames(sequence, max_frames=config.max_frames_per_sequence)
-    flat_depth = np.full((FRAME_HEIGHT, FRAME_WIDTH), 5.0, dtype=np.float32)
-    lidar_scan = _make_synthetic_lidar_scan()
-    imu_accel = np.zeros(3, dtype=np.float32)
-    imu_gyro = np.zeros(3, dtype=np.float32)
-    imu_quat = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32)
     depth_processor = DepthProcessor(CameraIntrinsics(fx=400.0, fy=400.0, cx=320.0, cy=240.0))
     track_memory: dict[int, np.ndarray] = {}
     previous_timestamp_us: int | None = None
@@ -387,10 +424,14 @@ def _write_sequence(
         duration_s=0.0,
         robot_config={
             "synthetic": True,
+            "normalized_from_raw": True,
             "generator": "pipelines.generate_synthetic_h5",
             "source_path": str(sequence.source_path),
             "detector_model": str(config.model_path),
             "tracker_config": str(config.tracker_config_path),
+            "derived_by": ["yolo", "botsort"],
+            "source_kind": "video" if isinstance(sequence, VideoSequence) else "image-sequence",
+            "missing_modalities": ["depth", "lidar", "imu"],
         },
         environment=config.scene_context,
     )
@@ -411,7 +452,7 @@ def _write_sequence(
                 detector=detector,
                 config=config,
             )
-            depth_boxes = depth_processor.detections_to_3d(flat_depth, detections)
+            depth_boxes = depth_processor.detections_to_3d(PROCESSING_DEPTH_FRAME, detections)
             tracks = tracker.update(detections[: len(depth_boxes)], depth_boxes, delta_time_s=max(delta_time_s, 1e-6))
             frame_annotation = _build_frame_annotation(
                 frame_id=frame_count,
@@ -424,11 +465,11 @@ def _write_sequence(
             writer.append(
                 rgb_frame=frame_bgr,
                 timestamp_us=timestamp_us,
-                depth_frame=flat_depth,
-                lidar_scan=lidar_scan,
-                imu_accel=imu_accel,
-                imu_gyro=imu_gyro,
-                imu_quat=imu_quat,
+                depth_frame=MISSING_DEPTH_FRAME,
+                lidar_scan=MISSING_LIDAR_SCAN,
+                imu_accel=MISSING_IMU_ACCEL,
+                imu_gyro=MISSING_IMU_GYRO,
+                imu_quat=MISSING_IMU_QUAT,
                 frame_annotation=frame_annotation,
                 scene_annotation=scene_annotation,
             )
@@ -440,6 +481,49 @@ def _write_sequence(
         path=output_path,
         source_name=sequence.name,
         frame_count=frame_count,
+        annotation_count=annotation_count,
+    )
+
+
+def _normalize_h5_sequence(sequence: H5Sequence, output_path: Path, config: SyntheticH5Config) -> GeneratedH5Summary:
+    payload = _read_partial_h5(sequence.source_path)
+    metadata = SessionMetadata(
+        session_id=f"normalized-{_slugify(sequence.name)}",
+        start_time=int(payload["rgb_timestamps"][0]) if len(payload["rgb_timestamps"]) else config.base_timestamp_us,
+        duration_s=float(payload["metadata"].get("duration_s", 0.0)),
+        robot_config={
+            "synthetic": True,
+            "normalized_from_raw": True,
+            "generator": "pipelines.generate_synthetic_h5",
+            "source_path": str(sequence.source_path),
+            "source_kind": "h5",
+            "derived_by": ["replay", "metadata_normalization"],
+            "missing_modalities": payload["missing_modalities"],
+            "source_metadata": payload["metadata"],
+        },
+        environment=str(payload["metadata"].get("environment", config.scene_context)),
+    )
+    HDF5Recorder(output_path).write(
+        metadata=metadata,
+        rgb_frames=payload["rgb_frames"],
+        rgb_timestamps=payload["rgb_timestamps"],
+        depth_frames=payload["depth_frames"],
+        depth_timestamps=payload["depth_timestamps"],
+        lidar_scans=payload["lidar_scans"],
+        lidar_num_points=payload["lidar_num_points"],
+        lidar_timestamps=payload["lidar_timestamps"],
+        imu_accel=payload["imu_accel"],
+        imu_gyro=payload["imu_gyro"],
+        imu_quat=payload["imu_quat"],
+        imu_timestamps=payload["imu_timestamps"],
+        frame_annotations=payload["frame_annotations"],
+        scene_annotations=payload["scene_annotations"],
+    )
+    annotation_count = sum(len(item.get("persons", [])) for item in payload["frame_annotations"])
+    return GeneratedH5Summary(
+        path=output_path,
+        source_name=sequence.name,
+        frame_count=int(payload["rgb_frames"].shape[0]),
         annotation_count=annotation_count,
     )
 
@@ -683,13 +767,6 @@ def _clip_detections(detections: np.ndarray, frame_shape: tuple[int, int, int]) 
     return detections.astype(np.float32, copy=False)
 
 
-def _make_synthetic_lidar_scan() -> np.ndarray:
-    scan = np.zeros((360, 2), dtype=np.float32)
-    scan[:, 0] = np.linspace(0.0, 2.0 * np.pi, 360, endpoint=False, dtype=np.float32)
-    scan[:, 1] = 5.0
-    return scan
-
-
 def _parse_roboflow_frame_name(path: Path) -> tuple[str, int | None]:
     match = _ROBOFLOW_FRAME_RE.search(path.name)
     if match is None:
@@ -728,19 +805,159 @@ def _slugify(value: str) -> str:
     return value.strip("._") or f"sequence_{int(time.time())}"
 
 
+def _read_partial_h5(path: Path) -> dict[str, object]:
+    with h5py.File(path, "r") as handle:
+        metadata_group = handle["metadata"] if "metadata" in handle else None
+        rgb_frames = _read_required_rgb_frames(handle)
+        rgb_timestamps = _read_required_timestamps(handle, "rgb_frames", len(rgb_frames))
+        depth_frames = _read_optional_depth_frames(handle, len(rgb_frames))
+        depth_timestamps = _read_optional_timestamps(handle, "depth_frames", rgb_timestamps)
+        lidar_scans, lidar_num_points = _read_optional_lidar(handle, len(rgb_frames))
+        lidar_timestamps = _read_optional_timestamps(handle, "lidar_scans", rgb_timestamps)
+        imu_accel, imu_gyro, imu_quat, imu_timestamps = _read_optional_imu(handle, rgb_timestamps)
+        frame_annotations, scene_annotations = _read_optional_annotations(handle, rgb_timestamps, config_context="UNKNOWN")
+        source_metadata = {
+            "session_id": metadata_group.attrs.get("session_id") if metadata_group is not None else path.stem,
+            "start_time": int(metadata_group.attrs.get("start_time", int(rgb_timestamps[0]) if len(rgb_timestamps) else 0))
+            if metadata_group is not None
+            else int(rgb_timestamps[0]) if len(rgb_timestamps) else 0,
+            "duration_s": float(metadata_group.attrs.get("duration_s", 0.0)) if metadata_group is not None else 0.0,
+            "environment": metadata_group.attrs.get("environment", "UNKNOWN") if metadata_group is not None else "UNKNOWN",
+        }
+        missing_modalities: list[str] = []
+        if np.isnan(depth_frames).all():
+            missing_modalities.append("depth")
+        if np.isnan(lidar_scans).all():
+            missing_modalities.append("lidar")
+        if np.isnan(imu_accel).all() and np.isnan(imu_gyro).all() and np.isnan(imu_quat).all():
+            missing_modalities.append("imu")
+        return {
+            "metadata": source_metadata,
+            "rgb_frames": rgb_frames,
+            "rgb_timestamps": rgb_timestamps,
+            "depth_frames": depth_frames,
+            "depth_timestamps": depth_timestamps,
+            "lidar_scans": lidar_scans,
+            "lidar_num_points": lidar_num_points,
+            "lidar_timestamps": lidar_timestamps,
+            "imu_accel": imu_accel,
+            "imu_gyro": imu_gyro,
+            "imu_quat": imu_quat,
+            "imu_timestamps": imu_timestamps,
+            "frame_annotations": frame_annotations,
+            "scene_annotations": scene_annotations,
+            "missing_modalities": missing_modalities,
+        }
+
+
+def _read_required_rgb_frames(handle: h5py.File) -> np.ndarray:
+    if "rgb_frames" in handle and "data" in handle["rgb_frames"]:
+        rgb = np.asarray(handle["rgb_frames"]["data"][...], dtype=np.uint8)
+        if rgb.ndim == 4:
+            return rgb
+    raise ValueError("raw h5 source must contain /rgb_frames/data with shape [N, H, W, 3]")
+
+
+def _read_required_timestamps(handle: h5py.File, group_name: str, default_length: int) -> np.ndarray:
+    group = handle[group_name]
+    if "timestamps" in group:
+        return np.asarray(group["timestamps"][...], dtype=np.uint64)
+    return np.arange(default_length, dtype=np.uint64)
+
+
+def _read_optional_depth_frames(handle: h5py.File, frame_count: int) -> np.ndarray:
+    if "depth_frames" in handle and "data" in handle["depth_frames"]:
+        return np.asarray(handle["depth_frames"]["data"][...], dtype=np.float32)
+    return np.repeat(MISSING_DEPTH_FRAME[None, :, :], frame_count, axis=0)
+
+
+def _read_optional_timestamps(handle: h5py.File, group_name: str, fallback: np.ndarray) -> np.ndarray:
+    if group_name in handle and "timestamps" in handle[group_name]:
+        return np.asarray(handle[group_name]["timestamps"][...], dtype=np.uint64)
+    return np.asarray(fallback, dtype=np.uint64)
+
+
+def _read_optional_lidar(handle: h5py.File, frame_count: int) -> tuple[np.ndarray, np.ndarray]:
+    if "lidar_scans" in handle and "data" in handle["lidar_scans"]:
+        lidar_data = np.asarray(handle["lidar_scans"]["data"][...], dtype=np.float32)
+        if "num_points" in handle["lidar_scans"]:
+            num_points = np.asarray(handle["lidar_scans"]["num_points"][...], dtype=np.uint32)
+        else:
+            num_points = np.full(frame_count, lidar_data.shape[1], dtype=np.uint32)
+        return lidar_data, num_points
+    lidar_data = np.repeat(MISSING_LIDAR_SCAN[None, :, :], frame_count, axis=0)
+    num_points = np.zeros(frame_count, dtype=np.uint32)
+    return lidar_data, num_points
+
+
+def _read_optional_imu(handle: h5py.File, fallback_timestamps: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    frame_count = len(fallback_timestamps)
+    if "imu" in handle:
+        imu_group = handle["imu"]
+        accel = np.asarray(imu_group["accel"][...], dtype=np.float32) if "accel" in imu_group else np.repeat(MISSING_IMU_ACCEL[None, :], frame_count, axis=0)
+        gyro = np.asarray(imu_group["gyro"][...], dtype=np.float32) if "gyro" in imu_group else np.repeat(MISSING_IMU_GYRO[None, :], frame_count, axis=0)
+        quat = np.asarray(imu_group["quat"][...], dtype=np.float32) if "quat" in imu_group else np.repeat(MISSING_IMU_QUAT[None, :], frame_count, axis=0)
+        timestamps = (
+            np.asarray(imu_group["timestamps"][...], dtype=np.uint64)
+            if "timestamps" in imu_group
+            else np.asarray(fallback_timestamps, dtype=np.uint64)
+        )
+        return accel, gyro, quat, timestamps
+    return (
+        np.repeat(MISSING_IMU_ACCEL[None, :], frame_count, axis=0),
+        np.repeat(MISSING_IMU_GYRO[None, :], frame_count, axis=0),
+        np.repeat(MISSING_IMU_QUAT[None, :], frame_count, axis=0),
+        np.asarray(fallback_timestamps, dtype=np.uint64),
+    )
+
+
+def _read_optional_annotations(
+    handle: h5py.File,
+    rgb_timestamps: np.ndarray,
+    *,
+    config_context: str,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    frame_count = len(rgb_timestamps)
+    if "annotations" in handle:
+        frame_values = (
+            [json.loads(item) for item in handle["annotations"]["frame_annotations"].asstr()[...]]
+            if "frame_annotations" in handle["annotations"]
+            else []
+        )
+        scene_values = (
+            [json.loads(item) for item in handle["annotations"]["scene_annotations"].asstr()[...]]
+            if "scene_annotations" in handle["annotations"]
+            else []
+        )
+        if frame_values and scene_values:
+            return frame_values, scene_values
+    default_frames = []
+    default_scenes = []
+    for frame_id, timestamp in enumerate(rgb_timestamps.tolist()):
+        scene = {
+            "context": config_context,
+            "crowd_density": 0.0,
+            "motion_entropy": 0.0,
+            "anomaly_flag": False,
+        }
+        default_frames.append({"frame_id": frame_id, "timestamp": int(timestamp), "persons": [], "scene": scene})
+        default_scenes.append(dict(scene))
+    return default_frames, default_scenes
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate HDF5 synthetic/pseudo-labeled datasets from data/raw.")
+    parser = argparse.ArgumentParser(description="Normalize heterogeneous data/raw sources into unified HDF5 sessions under data/synthetic.")
     defaults = DEFAULT_SYNTHETIC_H5_CONFIG
     parser.add_argument("--raw-dir", type=Path, default=defaults.raw_dir)
     parser.add_argument("--output-dir", type=Path, default=defaults.output_dir)
     parser.add_argument("--model-path", type=Path, default=defaults.model_path)
     parser.add_argument("--tracker-config", type=Path, default=defaults.tracker_config_path)
-    parser.add_argument("--source-kind", choices=["all", "images", "videos"], default=defaults.source_kind)
+    parser.add_argument("--source-kind", choices=["all", "images", "videos", "h5"], default=defaults.source_kind)
     parser.add_argument(
         "--image-detection-source",
         choices=["yolo", "labels", "hybrid"],
         default=defaults.image_detection_source,
-        help="For image folders, use YOLO predictions, existing YOLO labels, or labels with YOLO fallback.",
+        help="For image/video raw sources, use YOLO predictions, existing YOLO labels, or labels with YOLO fallback.",
     )
     parser.add_argument("--conf", type=float, default=defaults.confidence_threshold)
     parser.add_argument("--person-class-name", action="append", dest="person_class_names")

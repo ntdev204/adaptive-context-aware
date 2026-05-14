@@ -16,15 +16,16 @@
 #   - Requires NVIDIA Container Toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
 #   - Half-precision (FP16) is enabled by default for faster inference.
 
-# ---------------------------------------------------------------------------
-# Base: NVIDIA TensorRT (comes with CUDA + cuDNN + TensorRT pre-installed)
-# Use the tag matching your host CUDA version. Check with: nvcc --version
-# ---------------------------------------------------------------------------
-FROM nvcr.io/nvidia/tensorrt:24.01-py3 AS exporter
+ARG L4T_TAG=r36.4.0
+FROM dustynv/l4t-pytorch:${L4T_TAG} AS exporter
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_HOME=/app \
+    PIP_INDEX_URL=https://pypi.org/simple \
+    PIP_EXTRA_INDEX_URL=https://pypi.org/simple \
+    PIP_RETRIES=1 \
+    PIP_NO_CACHE_DIR=1 \
     # Path where the .pt weight file is expected inside the container
     CTX_PT_MODEL_PATH=/app/models/fine_tuning/best.pt \
     # Destination for the generated .engine file
@@ -37,7 +38,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR ${APP_HOME}
 
-# Install ultralytics (includes onnx + onnxruntime; TensorRT libs come from base image)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --upgrade "typing_extensions>=4.12.2,<5.0.0"
 RUN pip install --no-cache-dir ultralytics
 
 # Copy only what the export script needs
