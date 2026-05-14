@@ -32,6 +32,8 @@ imu_sample = {
 
 All sensor data recorded into a single HDF5 file per session.
 
+> `data/raw` is the messy intake layer. `data/synthetic` is the normalized HDF5 layer used for training and replay. For image/video sources, the normalized annotations are derived by the fine-tuned `YOLO + BoT-SORT` stack; when a modality is missing, its dataset should be present but filled with `NaN` (or zero-length/zero-count metadata where applicable) so other modalities remain unchanged.
+
 ```
 session_YYYYMMDD_HHMMSS.h5
 ├── /metadata
@@ -237,7 +239,7 @@ rl_state = [
 | Sample HDF5 | Synthetic recording | 5s, all sensors | `tests/fixtures/sample_recording.h5` | **Generated** by script (~2MB) |
 | Annotation samples | Hand-annotated | 5 frames (JSON) | `tests/fixtures/annotations/` | **Committed** (<10KB) |
 
-> **Repo hygiene:** Only tiny fixtures (<10MB total) are committed. Larger bootstrap subsets are extracted locally from `data/fine_tuning/` via `scripts/download_fixtures.py` and gitignored.
+> **Repo hygiene:** Only tiny fixtures (<10MB total) are committed. Larger bootstrap subsets are extracted locally from `data/fine_tuning/` via `scripts/download_fixtures.py` and gitignored. Raw robot/phone/internet captures live under `data/raw/`; normalized training sessions are written to `data/synthetic/`.
 
 ### Upgrade Path
 

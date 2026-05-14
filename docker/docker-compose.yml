@@ -81,7 +81,7 @@ services:
     environment:
       CTX_RUNTIME_ROLE: synthetic-h5
       SYNTHETIC_RAW_DIR: ${SYNTHETIC_RAW_DIR:-data/raw}
-      SYNTHETIC_OUTPUT_DIR: ${SYNTHETIC_OUTPUT_DIR:-data/synthetic_h5}
+      SYNTHETIC_OUTPUT_DIR: ${SYNTHETIC_OUTPUT_DIR:-data/synthetic}
       SYNTHETIC_MODEL_PATH: ${SYNTHETIC_MODEL_PATH:-models/fine_tuning/best.pt}
       SYNTHETIC_TRACKER_CONFIG: ${SYNTHETIC_TRACKER_CONFIG:-models/fine_tuning/botsort_tuned.json}
       SYNTHETIC_SOURCE_KIND: ${SYNTHETIC_SOURCE_KIND:-all}

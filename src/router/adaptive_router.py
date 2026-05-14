@@ -6,6 +6,7 @@ from enum import StrEnum
 import numpy as np
 
 from src.complexity.estimator import ComplexityLevel
+from src.router.rl_policy import RLPolicy, RLRouterState, RoutingAction
 
 
 class ReasoningPathway(StrEnum):
@@ -23,6 +24,9 @@ class RoutingDecision:
     latency_budget_ms: float
     pathway_budget_ms: dict[ReasoningPathway, float]
     soh_budget: float
+    strategy: str = "rule-based"
+    fallback_used: bool = False
+    selected_action: RoutingAction | None = None
 
     @property
     def downgraded(self) -> bool:
@@ -55,10 +59,66 @@ class AdaptiveRouter:
         ReasoningPathway.GNN: 15.0,
     }
 
-    def route(self, complexity_level: ComplexityLevel | int, soh_budget: float) -> RoutingDecision:
+    ACTION_TO_LEVEL = {
+        RoutingAction.FAST: ComplexityLevel.LOW,
+        RoutingAction.BALANCED: ComplexityLevel.MED,
+        RoutingAction.ACCURATE: ComplexityLevel.HIGH,
+        RoutingAction.EMERGENCY: ComplexityLevel.CRITICAL,
+    }
+
+    def __init__(self, rl_policy: RLPolicy | None = None) -> None:
+        self.rl_policy = rl_policy
+
+    def route(
+        self,
+        complexity_level: ComplexityLevel | int,
+        soh_budget: float,
+        *,
+        rl_state: RLRouterState | None = None,
+        use_rl: bool = True,
+    ) -> RoutingDecision:
         requested_level = self._coerce_level(complexity_level)
         clipped_soh = float(np.clip(soh_budget, 0.0, 1.0))
-        effective_level = self._apply_soh_override(requested_level, clipped_soh)
+        if use_rl and self.rl_policy is not None and rl_state is not None:
+            try:
+                rl_decision = self.rl_policy.decide(rl_state)
+            except Exception:
+                return self._route_rule_based(requested_level, clipped_soh, fallback_used=True)
+            rl_level = self.ACTION_TO_LEVEL[rl_decision.action]
+            return self._build_decision(
+                requested_level=requested_level,
+                effective_level=self._apply_soh_override(rl_level, clipped_soh),
+                soh_budget=clipped_soh,
+                strategy="rl-policy",
+                selected_action=rl_decision.action,
+            )
+        return self._route_rule_based(requested_level, clipped_soh)
+
+    def _route_rule_based(
+        self,
+        requested_level: ComplexityLevel,
+        soh_budget: float,
+        *,
+        fallback_used: bool = False,
+    ) -> RoutingDecision:
+        return self._build_decision(
+            requested_level=requested_level,
+            effective_level=self._apply_soh_override(requested_level, soh_budget),
+            soh_budget=soh_budget,
+            strategy="rule-based",
+            fallback_used=fallback_used,
+        )
+
+    def _build_decision(
+        self,
+        *,
+        requested_level: ComplexityLevel,
+        effective_level: ComplexityLevel,
+        soh_budget: float,
+        strategy: str,
+        fallback_used: bool = False,
+        selected_action: RoutingAction | None = None,
+    ) -> RoutingDecision:
         active_pathways = self.ROUTING_TABLE[effective_level]
         return RoutingDecision(
             requested_level=requested_level,
@@ -66,7 +126,10 @@ class AdaptiveRouter:
             active_pathways=active_pathways,
             latency_budget_ms=self.LATENCY_BUDGET_MS[effective_level],
             pathway_budget_ms={pathway: self.PATHWAY_TARGET_MS[pathway] for pathway in active_pathways},
-            soh_budget=clipped_soh,
+            soh_budget=soh_budget,
+            strategy=strategy,
+            fallback_used=fallback_used,
+            selected_action=selected_action,
         )
 
     def _apply_soh_override(self, level: ComplexityLevel, soh_budget: float) -> ComplexityLevel:

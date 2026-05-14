@@ -32,6 +32,11 @@ test = [
     "opencv-python-headless>=4.10.0",
     "torch>=2.4.0",
 ]
+rl = [
+    "gymnasium>=0.29.0",
+    "stable-baselines3>=2.3.0",
+    "torch>=2.4.0",
+]
 engine = [
     # TensorRT / torch-tensorrt / CUDA Python bindings are provided by the Jetson runtime image.
     "ultralytics>=8.3.0",
