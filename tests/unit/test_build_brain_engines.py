@@ -6,7 +6,7 @@ from scripts.build_brain_engines import build_brain_engines, build_engine_specs,
 def test_engine_specs_cover_phase_2_brain_models(tmp_path) -> None:
     specs = build_engine_specs(tmp_path)
 
-    assert [spec.name for spec in specs] == ["estimator", "gru", "tcn", "attention", "gnn", "fusion"]
+    assert [spec.name for spec in specs] == ["estimator", "gru", "tcn", "attention", "gnn", "fusion", "rl_policy"]
     assert [spec.output_path.name for spec in specs] == [
         "estimator.engine",
         "gru_pathway.engine",
@@ -14,6 +14,7 @@ def test_engine_specs_cover_phase_2_brain_models(tmp_path) -> None:
         "attention_pathway.engine",
         "gnn_pathway.engine",
         "gated_fusion.engine",
+        "rl_policy.engine",
     ]
 
 
@@ -31,7 +32,7 @@ def test_build_brain_engines_writes_all_files_with_mock_builder(tmp_path) -> Non
 
     results = build_brain_engines(tmp_path, builder=fake_builder)
 
-    assert len(results) == 6
+    assert len(results) == 7
     assert all(result.output_path.exists() for result in results)
     assert all(result.output_path.with_suffix(".json").exists() for result in results)
     assert all(result.engine_exists for result in results)

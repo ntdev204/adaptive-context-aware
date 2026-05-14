@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 from models import AttentionPathway, ComplexityEstimatorNet, GatedFusion, GraphAttentionPathway, GruPathway, TcnPathway
+from models.rl_policy import RLPolicyNet
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +117,15 @@ def build_engine_specs(output_dir: Path = Path("models/engines")) -> list[BrainE
             input_names=("pathway_outputs", "active_mask"),
             output_names=("fused",),
             expected_output_shape=(2, 256),
+        ),
+        BrainEngineSpec(
+            name="rl_policy",
+            model=RLPolicyNet().eval(),
+            inputs=(torch.zeros(1, 39, dtype=torch.float32),),
+            output_path=output_dir / "rl_policy.engine",
+            input_names=("router_state",),
+            output_names=("action_logits",),
+            expected_output_shape=(1, 4),
         ),
     ]
 

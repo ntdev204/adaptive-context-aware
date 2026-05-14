@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import h5py
 import numpy as np
 from jsonschema import validate
 from PIL import Image
@@ -41,6 +42,31 @@ def _write_raw_image_dataset(root: Path) -> Path:
     return dataset_dir
 
 
+def _write_loose_image_sequence(root: Path) -> Path:
+    sequence_dir = root / "phone_clip_a"
+    sequence_dir.mkdir(parents=True, exist_ok=True)
+    for frame_id in (1, 2):
+        image = np.full((48, 64, 3), fill_value=frame_id * 20, dtype=np.uint8)
+        Image.fromarray(image).save(sequence_dir / f"frame_{frame_id:04d}.jpg")
+    return sequence_dir
+
+
+def _write_partial_h5(root: Path) -> Path:
+    path = root / "partial.h5"
+    with h5py.File(path, "w") as handle:
+        metadata = handle.create_group("metadata")
+        metadata.attrs["session_id"] = "partial-session"
+        metadata.attrs["start_time"] = 1715000000000000
+        metadata.attrs["duration_s"] = 2.0
+        metadata.attrs["robot_config"] = json.dumps({"source": "phone"})
+        metadata.attrs["environment"] = "UNKNOWN"
+
+        rgb = handle.create_group("rgb_frames")
+        rgb.create_dataset("data", data=np.zeros((2, 480, 640, 3), dtype=np.uint8))
+        rgb.create_dataset("timestamps", data=np.array([10, 20], dtype=np.uint64))
+    return path
+
+
 def test_generate_synthetic_h5_from_raw_images_uses_existing_labels(tmp_path) -> None:
     raw_dir = tmp_path / "raw"
     output_dir = tmp_path / "synthetic_h5"
@@ -75,6 +101,7 @@ def test_generate_synthetic_h5_from_raw_images_uses_existing_labels(tmp_path) ->
     assert len(data["frame_annotations"]) == 3
     assert data["frame_annotations"][0]["persons"][0]["track_id"] == 1
     assert data["frame_annotations"][2]["persons"][0]["track_id"] == 1
+    assert data["metadata"].robot_config["derived_by"] == ["yolo", "botsort"]
 
     schema_path = Path(__file__).resolve().parents[2] / "config" / "schemas" / "annotation_schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -100,6 +127,56 @@ def test_generate_synthetic_h5_from_raw_images_can_use_detector(tmp_path) -> Non
 
     data = HDF5Reader(summaries[0].path).read()
     assert len(data["frame_annotations"][0]["persons"]) == 1
+
+
+def test_generate_synthetic_h5_from_loose_images_uses_nan_missing_modalities(tmp_path) -> None:
+    raw_dir = tmp_path / "raw"
+    _write_loose_image_sequence(raw_dir)
+
+    summaries = generate_synthetic_h5_dataset(
+        SyntheticH5Config(
+            raw_dir=raw_dir,
+            output_dir=tmp_path / "synthetic",
+            source_kind="images",
+            image_detection_source="yolo",
+            max_sequences=1,
+            max_frames_per_sequence=2,
+            overwrite=True,
+        ),
+        detector=FakeDetector(),
+    )
+
+    data = HDF5Reader(summaries[0].path).read()
+    assert np.isnan(data["depth_frames"]).all()
+    assert np.isnan(data["lidar_scans"]).all()
+    assert np.isnan(data["imu_accel"]).all()
+    assert data["metadata"].robot_config["missing_modalities"] == ["depth", "lidar", "imu"]
+    assert data["metadata"].robot_config["derived_by"] == ["yolo", "botsort"]
+
+
+def test_generate_synthetic_h5_normalizes_partial_h5_sources(tmp_path) -> None:
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    partial_h5 = _write_partial_h5(raw_dir)
+
+    summaries = generate_synthetic_h5_dataset(
+        SyntheticH5Config(
+            raw_dir=raw_dir,
+            output_dir=tmp_path / "synthetic",
+            source_kind="h5",
+            overwrite=True,
+        )
+    )
+
+    assert len(summaries) == 1
+    data = HDF5Reader(summaries[0].path).read()
+    assert data["metadata"].robot_config["source_kind"] == "h5"
+    np.testing.assert_array_equal(data["rgb_frames"], np.zeros((2, 480, 640, 3), dtype=np.uint8))
+    assert np.isnan(data["depth_frames"]).all()
+    assert np.isnan(data["lidar_scans"]).all()
+    assert np.isnan(data["imu_accel"]).all()
+    assert data["metadata"].robot_config["source_path"] == str(partial_h5)
+    assert data["metadata"].robot_config["derived_by"] == ["replay", "metadata_normalization"]
 
 
 def test_detections_from_yolo_label_supports_bbox_and_segmentation_labels(tmp_path) -> None:

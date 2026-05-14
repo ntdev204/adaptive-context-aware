@@ -12,10 +12,7 @@ import yaml
 class DetectorTrainingConfig:
     base_model: str = "yolo11m.pt"
     pretrain_dataset: Path = Path("data/fine_tuning/cctv_person/data.yaml")
-    custom_datasets: tuple[Path, ...] = (
-        Path("data/fine_tuning/custom_1"),
-        Path("data/fine_tuning/custom_2"),
-    )
+    custom_datasets: tuple[Path, ...] = ()
     work_dir: Path = Path("artifacts/detector")
     image_size: int = 640
     pretrain_epochs: int = 30
@@ -140,9 +137,13 @@ def build_merged_dataset(dataset_yamls: list[Path], output_root: str | Path) -> 
 
 
 def plan_detector_training(config: DetectorTrainingConfig = DetectorTrainingConfig()) -> DetectorTrainingPlan:
-    merged_dataset_yaml = build_merged_dataset(
-        [dataset_dir / "data.yaml" for dataset_dir in config.custom_datasets],
-        config.work_dir / "merged_custom_dataset",
+    merged_dataset_yaml = (
+        build_merged_dataset(
+            [dataset_dir / "data.yaml" for dataset_dir in config.custom_datasets],
+            config.work_dir / "merged_custom_dataset",
+        )
+        if config.custom_datasets
+        else config.pretrain_dataset
     )
     pretrain_weights = config.work_dir / config.project_name / config.run_name_pretrain / "weights" / "best.pt"
     finetune_weights = config.work_dir / config.project_name / config.run_name_finetune / "weights" / "best.pt"
@@ -172,17 +173,18 @@ def train_detector(config: DetectorTrainingConfig = DetectorTrainingConfig()) ->
         name=config.run_name_pretrain,
     )
 
-    finetune_model = YOLO(str(plan.pretrain_weights))
-    finetune_model.train(
-        data=str(plan.merged_dataset_yaml),
-        epochs=config.finetune_epochs,
-        imgsz=config.image_size,
-        batch=config.batch_size,
-        device=config.device,
-        workers=config.workers,
-        project=str(config.work_dir / config.project_name),
-        name=config.run_name_finetune,
-    )
+    if config.custom_datasets:
+        finetune_model = YOLO(str(plan.pretrain_weights))
+        finetune_model.train(
+            data=str(plan.merged_dataset_yaml),
+            epochs=config.finetune_epochs,
+            imgsz=config.image_size,
+            batch=config.batch_size,
+            device=config.device,
+            workers=config.workers,
+            project=str(config.work_dir / config.project_name),
+            name=config.run_name_finetune,
+        )
     return plan
 
 
@@ -201,7 +203,7 @@ def _filter_person_only_annotations(label_path: Path, person_class_index: int) -
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Stage YOLO11 detector training from CCTV and custom school datasets.")
+    parser = argparse.ArgumentParser(description="Stage YOLO11 detector training from the legacy detector datasets.")
     parser.add_argument("--base-model", default=DetectorTrainingConfig.base_model)
     parser.add_argument("--pretrain-dataset", type=Path, default=DetectorTrainingConfig.pretrain_dataset)
     parser.add_argument("--custom-dataset", action="append", type=Path, dest="custom_datasets")

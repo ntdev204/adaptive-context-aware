@@ -6,9 +6,9 @@ Thu muc nay luu notebook dung tren Colab Pro cho cac pipeline training hien co t
 
 - `01_yolo_finetune.ipynb`
   - `pipelines/train_detector.py`
-  - Fine-tune `YOLO11` theo 2 stage:
+  - Fine-tune `YOLO11` theo legacy detector split:
     - `cctv_person`
-    - `custom_1 + custom_2` (giu nguyen 6 class)
+    - custom detector datasets nếu còn dùng tạm
 
 - `02_botsort_finetune.ipynb`
   - `pipelines/train_tracker_botsort.py`
@@ -44,7 +44,7 @@ Thu muc nay luu notebook dung tren Colab Pro cho cac pipeline training hien co t
    - `pip install -e .[dev]`
    - hoac `pip install -e .[engine,dev]` neu can phan detector/runtime
 3. Download dataset cong khai truc tiep trong notebook bang `roboflow` hoac `kagglehub`.
-4. Copy dataset custom tu Google Drive vao `repo/data/fine_tuning/...`.
+4. Copy raw dataset tu nhieu nguon vao `repo/data/raw/...`.
 5. Chinh tham so trong notebook.
 6. Chay cell command goi thang `pipelines/`.
 
@@ -52,10 +52,10 @@ Thu muc nay luu notebook dung tren Colab Pro cho cac pipeline training hien co t
 
 - Dataset cong khai duoc download truc tiep vao runtime Colab.
 - Dataset custom duoc copy tu:
-  - `MyDrive/deep/data/fine_tuning/custom_1`
-  - `MyDrive/deep/data/fine_tuning/custom_2`
+  - `MyDrive/deep/data/raw/custom_1`
+  - `MyDrive/deep/data/raw/custom_2`
 - Sau khi download/copy, notebook se move/copy vao:
-  - `repo/data/fine_tuning/...`
+  - `repo/data/raw/...`
 - Ly do:
   - pipeline trong repo doc dataset theo duong dan `data/...`
   - khong can upload lai dataset cong khai len Drive
