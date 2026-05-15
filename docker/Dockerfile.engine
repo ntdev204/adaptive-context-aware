@@ -54,5 +54,6 @@ COPY scripts/export_engine.py ./scripts/export_engine.py
 # Create input/output directories. Model files are expected to be bind-mounted at runtime.
 RUN mkdir -p /app/models/engines /app/models/fine_tuning
 
-# Run the export at container start time so the output can be bind-mounted out
-CMD ["python", "scripts/export_engine.py"]
+# Run the export at container start time so the output can be bind-mounted out.
+# `dustynv/l4t-pytorch` exposes `python3` reliably, but not always `python`.
+CMD ["python3", "scripts/export_engine.py"]
