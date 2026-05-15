@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
+
+try:
+    from enum import StrEnum
+except ImportError:  # pragma: no cover - Python 3.10 on Jetson
+    from strenum import StrEnum
 
 import numpy as np
 
