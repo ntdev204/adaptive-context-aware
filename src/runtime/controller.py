@@ -35,7 +35,7 @@ class RuntimeConfig:
     heartbeat_port: int = 9093
     heartbeat_interval_ms: int = 500
     max_sensor_age_ms: int = 250
-    engine_path: str = "/app/models/engines/yolo11s.engine"
+    engine_path: str = "/app/models/engines/best.engine"
     camera_rgb_device: str = "/dev/video0"
     camera_depth_device: str = "/dev/video1"
     camera_width: int = FRAME_WIDTH

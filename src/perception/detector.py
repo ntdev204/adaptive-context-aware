@@ -94,7 +94,7 @@ class PersonDetector:
     def _engine_path(self) -> Path:
         if self.config.engine_path is not None:
             return self.config.engine_path
-        return Path(os.environ.get("CTX_ENGINE_MODEL_PATH", "/app/models/engines/yolo11s.engine"))
+        return Path(os.environ.get("CTX_ENGINE_MODEL_PATH", "/app/models/engines/best.engine"))
 
     def _get_runtime(self) -> DetectorRuntime:
         if self._runtime is None:

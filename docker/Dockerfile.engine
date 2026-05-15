@@ -9,7 +9,7 @@
 #     ctx-aware:engine
 #
 # Output:
-#   models/engines/yolo11s.engine
+#   models/engines/best.engine
 #
 # Notes:
 #   - Must be built and run on the TARGET machine (GPU architecture must match).
@@ -29,7 +29,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     # Path where the .pt weight file is expected inside the container
     CTX_PT_MODEL_PATH=/app/models/fine_tuning/best.pt \
     # Destination for the generated .engine file
-    CTX_ENGINE_OUTPUT=/app/models/engines/yolo11s.engine \
+    CTX_ENGINE_OUTPUT=/app/models/engines/best.engine \
     # Export settings (can be overridden at docker run time)
     ENGINE_IMG_SIZE=640 \
     ENGINE_HALF=True \
@@ -47,11 +47,10 @@ RUN pip install --upgrade "typing_extensions>=4.12.2,<5.0.0"
 RUN pip install --no-cache-dir ultralytics
 
 # Copy only what the export script needs
-COPY models/fine_tuning/best.pt ./models/fine_tuning/best.pt
-COPY scripts/export_engine.py   ./scripts/export_engine.py
+COPY scripts/export_engine.py ./scripts/export_engine.py
 
-# Create output directory
-RUN mkdir -p /app/models/engines
+# Create input/output directories. The best.pt file is expected to be bind-mounted at runtime.
+RUN mkdir -p /app/models/engines /app/models/fine_tuning
 
 # Run the export at container start time so the output can be bind-mounted out
 CMD ["python", "scripts/export_engine.py"]

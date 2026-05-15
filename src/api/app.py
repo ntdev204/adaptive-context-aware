@@ -80,7 +80,7 @@ def _load_runtime_config() -> RuntimeConfig:
         heartbeat_port=int(os.environ.get("CTX_HEARTBEAT_PORT", "9093")),
         heartbeat_interval_ms=int(os.environ.get("CTX_HEARTBEAT_INTERVAL_MS", "500")),
         max_sensor_age_ms=int(os.environ.get("CTX_MAX_SENSOR_AGE_MS", "250")),
-        engine_path=os.environ.get("CTX_ENGINE_MODEL_PATH", "/app/models/engines/yolo11s.engine"),
+        engine_path=os.environ.get("CTX_ENGINE_MODEL_PATH", "/app/models/engines/best.engine"),
         camera_rgb_device=os.environ.get("CTX_ASTRAS_RGB_DEVICE", "/dev/video0"),
         camera_depth_device=os.environ.get("CTX_ASTRAS_DEPTH_DEVICE", "/dev/video1"),
         camera_width=int(os.environ.get("CTX_ASTRAS_WIDTH", "640")),

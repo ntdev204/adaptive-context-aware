@@ -14,7 +14,11 @@ services:
       CTX_RESULT_PUBLISH_PORT: 5556
       CTX_HEARTBEAT_PORT: 9093
       CTX_HEARTBEAT_INTERVAL_MS: 500
+      CTX_PT_MODEL_PATH: /app/models/fine_tuning/best.pt
+      CTX_ENGINE_MODEL_PATH: /app/models/engines/best.engine
+      CTX_TRACKER_CONFIG_PATH: /app/models/fine_tuning/botsort_tuned.json
     volumes:
+      - ../models:/app/models
       - ctx-aware-engines:/app/models/engines
     devices:
       - /dev/bus/usb:/dev/bus/usb
@@ -37,10 +41,14 @@ services:
       CTX_RESULT_PUBLISH_PORT: 5556
       CTX_HEARTBEAT_PORT: 9093
       CTX_HEARTBEAT_INTERVAL_MS: 500
+      CTX_PT_MODEL_PATH: /app/models/fine_tuning/best.pt
+      CTX_ENGINE_MODEL_PATH: /app/models/engines/best.engine
+      CTX_TRACKER_CONFIG_PATH: /app/models/fine_tuning/botsort_tuned.json
     volumes:
       - ../src:/app/src
       - ../config:/app/config
       - ../scripts:/app/scripts
+      - ../models:/app/models
     ports:
       - "8080:8080"
       - "5555:5555"

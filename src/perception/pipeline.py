@@ -33,6 +33,7 @@ Example – run on live camera::
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Generator
@@ -77,7 +78,9 @@ class PerceptionPipeline:
     imu_fusion: IMUFusion = field(default_factory=IMUFusion)
     sensor_fusion: SensorFusion = field(default_factory=SensorFusion)
     feature_extractor: EntityFeatureExtractor = field(default_factory=EntityFeatureExtractor)
-    tracker_config_path: str = "models/fine_tuning/botsort_tuned.json"
+    tracker_config_path: str = field(
+        default_factory=lambda: os.environ.get("CTX_TRACKER_CONFIG_PATH", "models/fine_tuning/botsort_tuned.json")
+    )
 
     def __post_init__(self) -> None:
         self.tracker = self._load_tracker(self.tracker_config_path)
