@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from enum import IntEnum, StrEnum
+from enum import IntEnum
+
+try:
+    from enum import StrEnum
+except ImportError:  # pragma: no cover - Python 3.10 on Jetson
+    from strenum import StrEnum
 
 
 class Activity(StrEnum):

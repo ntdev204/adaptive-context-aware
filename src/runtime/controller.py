@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
+
+try:
+    from enum import StrEnum
+except ImportError:  # pragma: no cover - Python 3.10 on Jetson
+    from strenum import StrEnum
 
 from src.comm.health_monitor import HeartbeatClientDaemon
 from src.runtime.camera import AstraSCameraConfig, AstraSCameraRuntime
