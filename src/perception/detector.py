@@ -23,11 +23,13 @@ def _empty_detections() -> np.ndarray:
 @dataclass(slots=True)
 class DetectorConfig:
     backend: str = "engine"
-    """One of: ``"engine"`` (TensorRT), ``"synthetic"``."""
+    """One of: ``"engine"``, ``"pt"``, or ``"synthetic"``."""
     confidence_threshold: float = 0.25
     annotation_dir: Path | None = None
     engine_path: Path | None = None
     """Path to ``.engine`` file (engine backend). Falls back to ``CTX_ENGINE_MODEL_PATH`` env var."""
+    pt_model_path: Path | None = None
+    """Path to ``.pt`` detector weights (pt backend). Falls back to ``CTX_PT_MODEL_PATH`` env var."""
 
 
 @dataclass(slots=True)
@@ -58,6 +60,7 @@ class PersonDetector:
     def __init__(self, config: DetectorConfig | None = None, runtime: DetectorRuntime | None = None) -> None:
         self.config = config or DetectorConfig()
         self._runtime = runtime
+        self._pt_model: Any | None = None
 
     def preprocess(self, frame_bgr: np.ndarray) -> np.ndarray:
         if frame_bgr.shape != (FRAME_HEIGHT, FRAME_WIDTH, 3):
@@ -75,6 +78,10 @@ class PersonDetector:
                 detections=self._infer_synthetic(frame_id),
                 backend=self.config.backend,
             )
+
+        if self.config.backend == "pt":
+            detections = self._infer_pt(frame_bgr)
+            return DetectorResult(detections=detections, backend=self.config.backend)
 
         # --- engine (TensorRT) backend ---
         input_batch = self.preprocess(frame_bgr)
@@ -103,6 +110,39 @@ class PersonDetector:
                 raise FileNotFoundError(f"missing TensorRT engine: {engine_path}")
             self._runtime = TensorRTEngineRunner(engine_path, ("images",))
         return self._runtime
+
+    def _pt_model_path(self) -> Path:
+        if self.config.pt_model_path is not None:
+            return self.config.pt_model_path
+        return Path(os.environ.get("CTX_PT_MODEL_PATH", "/app/models/fine_tuning/best.pt"))
+
+    def _get_pt_model(self) -> Any:
+        if self._pt_model is None:
+            model_path = self._pt_model_path()
+            if not model_path.exists():
+                raise FileNotFoundError(f"missing detector weights: {model_path}")
+            try:
+                from ultralytics import YOLO  # type: ignore[import-untyped]
+            except ImportError as exc:
+                raise RuntimeError("ultralytics is required for pt detector backend") from exc
+            self._pt_model = YOLO(str(model_path))
+        return self._pt_model
+
+    def _infer_pt(self, frame_bgr: np.ndarray) -> np.ndarray:
+        model = self._get_pt_model()
+        results = model.predict(frame_bgr, conf=self.config.confidence_threshold, verbose=False)
+        if not results or results[0].boxes is None or len(results[0].boxes) == 0:
+            return _empty_detections()
+
+        boxes = results[0].boxes
+        xyxy = boxes.xyxy.cpu().numpy().astype(np.float32)
+        confidences = boxes.conf.cpu().numpy().astype(np.float32)
+        class_ids = boxes.cls.cpu().numpy().astype(np.float32)
+        xywh = xyxy.copy()
+        xywh[:, 2] -= xywh[:, 0]
+        xywh[:, 3] -= xywh[:, 1]
+        detections = np.column_stack([xywh, confidences, class_ids]).astype(np.float32)
+        return self._filter_person_class(self._clip_detections(detections, frame_bgr.shape))
 
     # ------------------------------------------------------------------
     # Synthetic backend helper

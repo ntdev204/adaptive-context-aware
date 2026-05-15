@@ -69,7 +69,9 @@ class PerceptionPipelineReport:
 
 @dataclass(slots=True)
 class PerceptionPipeline:
-    detector: PersonDetector = field(default_factory=lambda: PersonDetector(DetectorConfig(backend="engine")))
+    detector: PersonDetector = field(
+        default_factory=lambda: PersonDetector(DetectorConfig(backend=os.environ.get("CTX_RUNTIME_BACKEND", "engine")))
+    )
     depth_processor: DepthProcessor = field(
         default_factory=lambda: DepthProcessor(CameraIntrinsics(fx=400.0, fy=400.0, cx=320.0, cy=240.0))
     )

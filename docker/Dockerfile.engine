@@ -1,4 +1,4 @@
-# Dockerfile.engine — Export best.pt → TensorRT .engine
+# Dockerfile.engine — Export one or many .pt models → TensorRT .engine
 #
 # Build:
 #   make build-engine
@@ -9,7 +9,7 @@
 #     ctx-aware:engine
 #
 # Output:
-#   models/engines/best.engine
+#   models/engines/*.engine
 #
 # Notes:
 #   - Must be built and run on the TARGET machine (GPU architecture must match).
@@ -26,9 +26,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_EXTRA_INDEX_URL=https://pypi.org/simple \
     PIP_RETRIES=1 \
     PIP_NO_CACHE_DIR=1 \
-    # Path where the .pt weight file is expected inside the container
-    CTX_PT_MODEL_PATH=/app/models/fine_tuning/best.pt \
-    # Destination for the generated .engine file
+    # Optional single-file mode. Leave CTX_PT_MODEL_PATH empty to export all .pt under CTX_PT_MODEL_ROOT.
+    CTX_PT_MODEL_PATH= \
+    CTX_PT_MODEL_ROOT=/app/models \
+    CTX_ENGINE_ROOT=/app/models/engines \
+    # Destination for the generated .engine file in single-file mode
     CTX_ENGINE_OUTPUT=/app/models/engines/best.engine \
     # Export settings (can be overridden at docker run time)
     ENGINE_IMG_SIZE=640 \
@@ -49,7 +51,7 @@ RUN pip install --no-cache-dir ultralytics
 # Copy only what the export script needs
 COPY scripts/export_engine.py ./scripts/export_engine.py
 
-# Create input/output directories. The best.pt file is expected to be bind-mounted at runtime.
+# Create input/output directories. Model files are expected to be bind-mounted at runtime.
 RUN mkdir -p /app/models/engines /app/models/fine_tuning
 
 # Run the export at container start time so the output can be bind-mounted out

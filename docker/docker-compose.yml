@@ -8,6 +8,7 @@ services:
       CTX_ASTRAS_DEPTH_DEVICE: ""
       CTX_ASTRAS_RGB_DEVICE: ""
       CTX_RUNTIME_ROLE: control-api
+      CTX_RUNTIME_BACKEND: engine
       CTX_JETSON_HOST: 25.12.4.100
       CTX_PI_HOST: 25.12.4.101
       CTX_SENSOR_INGEST_PORT: 5555
@@ -35,6 +36,7 @@ services:
       CTX_ASTRAS_DEPTH_DEVICE: ""
       CTX_ASTRAS_RGB_DEVICE: ""
       CTX_RUNTIME_ROLE: dev-control-api
+      CTX_RUNTIME_BACKEND: engine
       CTX_JETSON_HOST: 127.0.0.1
       CTX_PI_HOST: 127.0.0.2
       CTX_SENSOR_INGEST_PORT: 5555

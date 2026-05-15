@@ -1,12 +1,14 @@
-"""export_engine.py — Export best.pt to TensorRT .engine file.
+"""export_engine.py — Export one or many .pt files to TensorRT .engine files.
 
 Called by docker/Dockerfile.engine as the container CMD.
 All settings are read from environment variables so they can be
 overridden at ``docker run`` time without rebuilding the image.
 
 Environment variables:
-    CTX_PT_MODEL_PATH   : path to the .pt weight file  (default: /app/models/fine_tuning/best.pt)
-    CTX_ENGINE_OUTPUT   : destination .engine path      (default: /app/models/engines/yolo11s.engine)
+    CTX_PT_MODEL_PATH   : optional single .pt file path
+    CTX_PT_MODEL_ROOT   : root directory to scan for .pt files (default: /app/models)
+    CTX_ENGINE_OUTPUT   : destination .engine path for single-file mode
+    CTX_ENGINE_ROOT     : destination directory for multi-file mode (default: /app/models/engines)
     ENGINE_IMG_SIZE     : inference image size           (default: 640)
     ENGINE_HALF         : use FP16 half precision        (default: True)
     ENGINE_WORKSPACE_GB : TensorRT workspace in GB       (default: 4)
@@ -49,9 +51,7 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def export_engine() -> Path:
-    pt_path = Path(os.environ.get("CTX_PT_MODEL_PATH", "/app/models/fine_tuning/best.pt"))
-    engine_out = Path(os.environ.get("CTX_ENGINE_OUTPUT", "/app/models/engines/yolo11s.engine"))
+def export_single_engine(pt_path: Path, engine_out: Path) -> Path:
     img_size = _env_int("ENGINE_IMG_SIZE", 640)
     half = _env_bool("ENGINE_HALF", True)
     workspace_gb = _env_int("ENGINE_WORKSPACE_GB", 4)
@@ -108,6 +108,71 @@ def export_engine() -> Path:
     print(f"[export_engine] ✓ Metadata saved: {meta_path}")
     print(f"[export_engine] ✓ SHA-256       : {engine_sha}")
     return engine_out
+
+
+def _iter_pt_files(model_root: Path, engine_root: Path) -> list[Path]:
+    pt_files = []
+    for path in sorted(model_root.rglob("*.pt")):
+        try:
+            path.relative_to(engine_root)
+            continue
+        except ValueError:
+            pass
+        pt_files.append(path)
+    return pt_files
+
+
+def _resolve_multi_engine_outputs(pt_files: list[Path], engine_root: Path) -> dict[Path, Path]:
+    outputs: dict[str, Path] = {}
+    mapping: dict[Path, Path] = {}
+    collisions: dict[str, list[str]] = {}
+
+    for pt_path in pt_files:
+        engine_name = f"{pt_path.stem}.engine"
+        engine_out = engine_root / engine_name
+        if engine_name in outputs:
+            collisions.setdefault(engine_name, [str(outputs[engine_name])]).append(str(pt_path))
+            continue
+        outputs[engine_name] = pt_path
+        mapping[pt_path] = engine_out
+
+    if collisions:
+        lines = []
+        for engine_name, paths in sorted(collisions.items()):
+            joined = ", ".join(paths)
+            lines.append(f"{engine_name}: {joined}")
+        print("[export_engine] ERROR: duplicate .pt stems would overwrite engine outputs:", file=sys.stderr)
+        for line in lines:
+            print(f"  - {line}", file=sys.stderr)
+        sys.exit(1)
+
+    return mapping
+
+
+def export_engine() -> list[Path]:
+    pt_model_path_raw = os.environ.get("CTX_PT_MODEL_PATH", "").strip()
+    pt_model_root = Path(os.environ.get("CTX_PT_MODEL_ROOT", "/app/models"))
+    engine_root = Path(os.environ.get("CTX_ENGINE_ROOT", "/app/models/engines"))
+
+    if pt_model_path_raw:
+        pt_path = Path(pt_model_path_raw)
+        engine_out = Path(os.environ.get("CTX_ENGINE_OUTPUT", str(engine_root / f"{pt_path.stem}.engine")))
+        return [export_single_engine(pt_path, engine_out)]
+
+    if not pt_model_root.exists():
+        print(f"[export_engine] ERROR: model root not found: {pt_model_root}", file=sys.stderr)
+        sys.exit(1)
+
+    pt_files = _iter_pt_files(pt_model_root, engine_root)
+    if not pt_files:
+        print(f"[export_engine] ERROR: no .pt files found under {pt_model_root}", file=sys.stderr)
+        sys.exit(1)
+
+    exported_paths: list[Path] = []
+    output_map = _resolve_multi_engine_outputs(pt_files, engine_root)
+    for pt_path in pt_files:
+        exported_paths.append(export_single_engine(pt_path, output_map[pt_path]))
+    return exported_paths
 
 
 if __name__ == "__main__":

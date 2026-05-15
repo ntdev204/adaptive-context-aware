@@ -30,12 +30,14 @@ class RuntimeState(StrEnum):
 class RuntimeConfig:
     jetson_host: str = "127.0.0.1"
     pi_host: str = "25.12.4.101"
+    runtime_backend: str = "engine"
     sensor_ingest_port: int = 5555
     result_publish_port: int = 5556
     heartbeat_port: int = 9093
     heartbeat_interval_ms: int = 500
     max_sensor_age_ms: int = 250
     engine_path: str = "/app/models/engines/best.engine"
+    pt_model_path: str = "/app/models/fine_tuning/best.pt"
     camera_rgb_device: str = "/dev/video0"
     camera_depth_device: str = "/dev/video1"
     camera_width: int = FRAME_WIDTH
@@ -118,17 +120,17 @@ class JetsonRuntimeController:
         snapshot = self.sensor_store.snapshot()
         ingest_stats = self._ingest.stats()
         reason = self._reason
-        engine_available = Path(self.config.engine_path).exists()
+        inference_artifact_available = self._inference_artifact_available()
         camera_available = self._camera_available()
         ready = (
             self._state is RuntimeState.RUNNING
-            and engine_available
+            and inference_artifact_available
             and camera_available
             and snapshot.has_lidar
             and snapshot.has_imu
         )
         if self._state is RuntimeState.RUNNING:
-            if not engine_available:
+            if not inference_artifact_available:
                 reason = "waiting for inference engine"
             elif not camera_available:
                 reason = "waiting for AstraS RGB-D camera devices"
@@ -149,7 +151,7 @@ class JetsonRuntimeController:
             ready=ready,
             reason=reason,
             ingest=ingest_stats,
-            engine_available=engine_available,
+            engine_available=inference_artifact_available,
             camera_available=camera_available,
             result_endpoint=self._result_publisher.config.endpoint,
             heartbeat_endpoint=f"tcp://{self.config.pi_host}:{self.config.heartbeat_port}",
@@ -161,6 +163,11 @@ class JetsonRuntimeController:
         except Exception:
             return False
         return True
+
+    def _inference_artifact_available(self) -> bool:
+        if self.config.runtime_backend == "pt":
+            return Path(self.config.pt_model_path).exists()
+        return Path(self.config.engine_path).exists()
 
     def _start_heartbeat(self) -> None:
         if self._heartbeat_client is not None:

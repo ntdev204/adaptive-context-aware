@@ -5,7 +5,7 @@ DOCKER ?= docker
 COMPOSE ?= $(DOCKER) compose -f docker/docker-compose.yml
 
 .PHONY: help install install-dev test test-unit lint fixtures fixtures-download benchmark-ci benchmark-laptop benchmark-jetson baseline-update \
-	docker-build-dev docker-build-test docker-build-prod build-engine compose-config compose-up compose-down run clean
+	docker-build-dev docker-build-test docker-build-prod build-engine export-engine compose-config compose-up compose-down compose-logs run clean
 
 help:
 	@echo "Available targets:"
@@ -22,10 +22,12 @@ help:
 	@echo "  docker-build-dev   Build Jetson-native development image"
 	@echo "  docker-build-test  Build test image"
 	@echo "  docker-build-prod  Build Jetson-native production image"
-	@echo "  build-engine       Export best.pt → TensorRT .engine (requires --gpus all)"
+	@echo "  build-engine       Build engine-export image"
+	@echo "  export-engine      Export all .pt models under models/ → TensorRT .engine on target Jetson"
 	@echo "  compose-config     Validate docker compose config"
 	@echo "  compose-up         Start compose services"
 	@echo "  compose-down       Stop compose services"
+	@echo "  compose-logs       Follow compose logs"
 	@echo "  run                Run application entrypoint locally"
 
 install:
@@ -72,6 +74,11 @@ docker-build-prod:
 build-engine:
 	$(DOCKER) build -f docker/Dockerfile.engine -t ctx-aware:engine .
 
+export-engine: build-engine
+	$(DOCKER) run --rm --gpus all \
+		-v "$(CURDIR)/models:/app/models" \
+		ctx-aware:engine
+
 compose-config:
 	$(COMPOSE) config
 
@@ -80,6 +87,9 @@ compose-up:
 
 compose-down:
 	$(COMPOSE) down
+
+compose-logs:
+	$(COMPOSE) logs -f
 
 run:
 	$(PYTHON) -m src.main
