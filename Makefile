@@ -95,25 +95,22 @@ export-engine: build-engine
 compose-config:
 	$(COMPOSE) config
 
-config: compose-config
-
-up:
+compose-up:
 	$(COMPOSE) up -d control-api rai-postgres rai-server rai-client
 
-down:
+compose-down:
 	$(COMPOSE) down
 
-logs:
+compose-logs:
 	$(COMPOSE) logs -f control-api rai-server rai-client
 
-compose-up:
-	$(MAKE) up
+config: compose-config
 
-compose-down:
-	$(MAKE) down
+up: compose-up
 
-compose-logs:
-	$(MAKE) logs
+down: compose-down
+
+logs: compose-logs
 
 run:
 	$(PYTHON) -m src.main
