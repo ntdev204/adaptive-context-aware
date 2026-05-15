@@ -8,11 +8,14 @@ class HealthResponse(BaseModel):
 
 
 class RuntimeConfigResponse(BaseModel):
+    bind_host: str
     jetson_host: str
     pi_host: str
     sensor_ingest_endpoint: str
     result_publish_endpoint: str
     engine_path: str
+    camera_source: str
+    scada_camera_endpoint: str | None = None
     camera_rgb_device: str
     camera_depth_device: str
     max_sensor_age_ms: int
@@ -31,6 +34,10 @@ class RuntimeMetricsResponse(BaseModel):
     reason: str | None = None
     engine_available: bool
     camera_available: bool
+    perception_running: bool
+    frames_processed: int = Field(ge=0)
+    last_result_age_ms: float | None = None
+    last_runtime_error: str | None = None
     sensor_ingest_endpoint: str
     result_publish_endpoint: str
     heartbeat_endpoint: str

@@ -208,9 +208,9 @@ reward = (
 │  │  │ • Cmd tx    │ │ • E-Stop   │  │  │
 │  │  └─────────────┘ └────────────┘  │  │
 │  │                                   │  │
-│  │  Volume: ctx-aware-engines         │  │
-│  │  (.engine cache, persists across   │  │
-│  │   container restarts)              │  │
+│  │  Bind: models/engines              │  │
+│  │  (.engine exported on host,        │  │
+│  │   reused by control-api)           │  │
 │  └───────────────────────────────────┘  │
 │                                         │
 │  systemd: docker-compose auto-start     │
@@ -324,7 +324,7 @@ Robot (Jetson)                    Dev Machine
 
 > **Note:** `.engine` files MUST be built ON the Jetson (architecture-specific).
 > Docker image and model volume use TensorRT `.engine` artifacts only.
-> Built engines are cached in Docker volume (`ctx-aware-engines`). If engine build/load fails, runtime stops or enters degraded mode; there is no CPU inference fallback.
+> Built engines are exported to `models/engines` by `make export-engine` and bind-mounted into `control-api`. If engine build/load fails, runtime stops or enters degraded mode; there is no CPU inference fallback.
 
 ---
 
