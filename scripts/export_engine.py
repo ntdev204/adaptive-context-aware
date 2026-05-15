@@ -1,7 +1,7 @@
-"""Export all YOLO .pt models under the models tree to TensorRT .engine files.
+"""Export YOLO .pt models to TensorRT .engine using Ultralytics built-in export.
 
-Uses Ultralytics' built-in TensorRT export entrypoint and scans the configured
-model root for every `.pt` file.
+Uses the same per-model export flow as the validated single-model script, then
+applies it to every `.pt` found under the configured model root.
 
 Usage:
     python3 scripts/export_engine.py
@@ -21,6 +21,7 @@ log = logging.getLogger("export_engine")
 DEFAULT_MODEL_ROOT = os.environ.get("CTX_PT_MODEL_ROOT", "/app/models")
 DEFAULT_OUTPUT_DIR = os.environ.get("CTX_ENGINE_ROOT", "/app/models/engines")
 DEFAULT_WORKSPACE_GB = int(os.environ.get("ENGINE_WORKSPACE_GB", "2"))
+DEFAULT_IMGSZ = [480, 640]
 
 
 def main() -> None:
@@ -46,7 +47,7 @@ def main() -> None:
         "--imgsz",
         type=int,
         nargs="+",
-        default=[480, 640],
+        default=DEFAULT_IMGSZ,
         help="Input size as H W (default: 480 640 for landscape camera)",
     )
     parser.add_argument(
@@ -69,9 +70,6 @@ def main() -> None:
         log.error("No .pt files found under %s", model_root)
         raise SystemExit(1)
 
-    output_map = _resolve_outputs(pt_files, output_dir)
-    imgsz = args.imgsz if len(args.imgsz) > 1 else args.imgsz[0]
-
     os.environ.setdefault("YOLO_OFFLINE", "True")
     os.environ.setdefault("ULTRALYTICS_TELEMETRY", "0")
 
@@ -79,42 +77,72 @@ def main() -> None:
 
     _logging.getLogger("ultralytics").setLevel(_logging.ERROR)
 
-    from ultralytics import YOLO
-
+    output_map = _resolve_outputs(pt_files, output_dir)
+    imgsz = args.imgsz if len(args.imgsz) > 1 else args.imgsz[0]
     failures = 0
     for pt_path in pt_files:
         engine_path = output_map[pt_path]
-        log.info(
-            "Exporting %s -> %s [FP16=%s, workspace=%dGB, imgsz=%s]",
-            pt_path,
-            engine_path,
-            args.fp16,
-            args.workspace,
-            imgsz,
-        )
-        model = YOLO(str(pt_path))
-        exported = Path(
-            model.export(
-                format="engine",
-                device=0,
-                half=args.fp16,
-                imgsz=imgsz,
-                workspace=args.workspace,
-                simplify=False,
-                verbose=False,
-            )
-        )
-        if exported.exists() and exported.resolve() != engine_path.resolve():
-            exported.replace(engine_path)
-
-        if engine_path.exists():
-            size_mb = engine_path.stat().st_size / (1024**2)
-            log.info("Engine saved: %s (%.1f MB)", engine_path, size_mb)
-        else:
-            log.error("Export failed -- engine not found at %s", engine_path)
+        if not export_model(
+            pt_path=pt_path,
+            engine_path=engine_path,
+            fp16=args.fp16,
+            imgsz=imgsz,
+            workspace=args.workspace,
+        ):
             failures += 1
 
     os._exit(1 if failures else 0)
+
+
+def export_model(
+    *,
+    pt_path: Path,
+    engine_path: Path,
+    fp16: bool,
+    imgsz: list[int] | int,
+    workspace: int,
+) -> bool:
+    if not pt_path.exists():
+        log.error("Model not found: %s", pt_path)
+        return False
+
+    engine_path.parent.mkdir(parents=True, exist_ok=True)
+    log.info(
+        "Exporting %s -> %s  [FP16=%s, workspace=%dGB, imgsz=%s]",
+        pt_path,
+        engine_path,
+        fp16,
+        workspace,
+        imgsz,
+    )
+
+    from ultralytics import YOLO
+
+    model = YOLO(str(pt_path))
+
+    log.info("Running TensorRT export (this takes 3-10 min on Jetson Orin)...")
+    exported = Path(
+        model.export(
+            format="engine",
+            device=0,
+            half=fp16,
+            imgsz=imgsz,
+            workspace=workspace,
+            simplify=False,
+            verbose=False,
+        )
+    )
+
+    if exported.exists() and exported.resolve() != engine_path.resolve():
+        exported.replace(engine_path)
+
+    if engine_path.exists():
+        size_mb = engine_path.stat().st_size / (1024**2)
+        log.info("Engine saved: %s (%.1f MB)", engine_path, size_mb)
+        return True
+
+    log.error("Export failed -- engine not found at %s", engine_path)
+    return False
 
 
 def _iter_pt_files(model_root: Path, output_dir: Path) -> list[Path]:
