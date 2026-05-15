@@ -9,6 +9,8 @@ make export-engine
 make compose-up
 ```
 
+`make export-engine` reuses `ctx-aware:dev`; there is no separate export-only image anymore.
+
 `make compose-up` starts:
 
 - `control-api`: adaptive runtime, ZMQ sensor ingest `5555`, result PUB `5556`, heartbeat `9093`.

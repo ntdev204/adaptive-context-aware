@@ -22,7 +22,7 @@ help:
 	@echo "  baseline-update    Refresh CI baselines"
 	@echo "  docker-build-dev   Build Jetson-native development image"
 	@echo "  docker-build-prod  Build Jetson-native production image"
-	@echo "  export-engine      Export all .pt models under models/ → TensorRT .engine on target Jetson"
+	@echo "  export-engine      Export all .pt models under models/ → TensorRT .engine using ctx-aware:dev"
 	@echo "  compose-up         Start adaptive runtime + rai_website dataset/control stack"
 	@echo "  compose-down       Stop stack"
 	@echo "  compose-logs       Follow stack logs"
@@ -34,7 +34,7 @@ help:
 	@echo "  logs               Alias: compose-logs"
 	@echo "  config             Alias: compose-config"
 	@echo "  docker-build-test  Build test image"
-	@echo "  build-engine       Build engine-export image"
+	@echo "  build-engine       Alias: docker-build-dev"
 	@echo "  run                Run application entrypoint locally"
 
 install:
@@ -84,13 +84,13 @@ build-dev: docker-build-dev
 build-prod: docker-build-prod
 	$(COMPOSE) build control-api rai-server rai-client
 
-build-engine:
-	$(DOCKER) build -f docker/Dockerfile.engine -t ctx-aware:engine .
+build-engine: docker-build-dev
 
-export-engine: build-engine
+export-engine:
+	@$(DOCKER) image inspect ctx-aware:dev > /dev/null 2>&1 || (echo "ctx-aware:dev not found; run 'make docker-build-dev' first." >&2; exit 1)
 	$(DOCKER) run --rm --gpus all \
 		-v "$(CURDIR)/models:/app/models" \
-		ctx-aware:engine
+		ctx-aware:dev python3 scripts/export_engine.py --root /app/models --output-dir /app/models/engines
 
 compose-config:
 	$(COMPOSE) config

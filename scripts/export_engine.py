@@ -1,120 +1,127 @@
-"""export_engine.py — Export one or many .pt files to TensorRT .engine files.
+"""Export all YOLO .pt models under the models tree to TensorRT .engine files.
 
-Called by docker/Dockerfile.engine as the container CMD.
-All settings are read from environment variables so they can be
-overridden at ``docker run`` time without rebuilding the image.
+Uses Ultralytics' built-in TensorRT export entrypoint and scans the configured
+model root for every `.pt` file.
 
-Environment variables:
-    CTX_PT_MODEL_PATH   : optional single .pt file path
-    CTX_PT_MODEL_ROOT   : root directory to scan for .pt files (default: /app/models)
-    CTX_ENGINE_OUTPUT   : destination .engine path for single-file mode
-    CTX_ENGINE_ROOT     : destination directory for multi-file mode (default: /app/models/engines)
-    ENGINE_IMG_SIZE     : inference image size           (default: 640)
-    ENGINE_HALF         : use FP16 half precision        (default: True)
-    ENGINE_WORKSPACE_GB : TensorRT workspace in GB       (default: 4)
-    ENGINE_BATCH        : static batch size              (default: 1)
-
-Usage (inside container):
-    python scripts/export_engine.py
-
-Usage (override at runtime):
-    docker run --gpus all --rm \\
-        -v "$(pwd)/models:/app/models" \\
-        -e ENGINE_HALF=False \\
-        -e ENGINE_IMG_SIZE=480 \\
-        ctx-aware:engine
+Usage:
+    python3 scripts/export_engine.py
+    python3 scripts/export_engine.py --root /app/models --output-dir /app/models/engines
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
+import argparse
+import logging
 import os
-import sys
 from pathlib import Path
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+log = logging.getLogger("export_engine")
 
-def _env_bool(name: str, default: bool) -> bool:
-    val = os.environ.get(name, str(default)).strip().lower()
-    return val in ("1", "true", "yes")
-
-
-def _env_int(name: str, default: int) -> int:
-    return int(os.environ.get(name, str(default)))
+DEFAULT_MODEL_ROOT = os.environ.get("CTX_PT_MODEL_ROOT", "/app/models")
+DEFAULT_OUTPUT_DIR = os.environ.get("CTX_ENGINE_ROOT", "/app/models/engines")
+DEFAULT_WORKSPACE_GB = int(os.environ.get("ENGINE_WORKSPACE_GB", "2"))
 
 
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def export_single_engine(pt_path: Path, engine_out: Path) -> Path:
-    img_size = _env_int("ENGINE_IMG_SIZE", 640)
-    half = _env_bool("ENGINE_HALF", True)
-    workspace_gb = _env_int("ENGINE_WORKSPACE_GB", 4)
-    batch = _env_int("ENGINE_BATCH", 1)
-
-    print(f"[export_engine] Source   : {pt_path}")
-    print(f"[export_engine] Output   : {engine_out}")
-    print(f"[export_engine] img_size : {img_size}  half: {half}  workspace: {workspace_gb}GB  batch: {batch}")
-
-    if not pt_path.exists():
-        print(f"[export_engine] ERROR: .pt file not found: {pt_path}", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        from ultralytics import YOLO  # type: ignore[import-untyped]
-    except ImportError:
-        print("[export_engine] ERROR: ultralytics not installed.", file=sys.stderr)
-        sys.exit(1)
-
-    model = YOLO(str(pt_path))
-
-    # Export — ultralytics writes the .engine next to the .pt by default
-    exported_path = Path(
-        model.export(
-            format="engine",
-            imgsz=img_size,
-            half=half,
-            workspace=workspace_gb,
-            batch=batch,
-            device=0,  # GPU 0 (required for TensorRT export)
-        )
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Export all YOLO .pt -> TensorRT .engine")
+    parser.add_argument(
+        "--root",
+        default=DEFAULT_MODEL_ROOT,
+        help="Root directory to scan for .pt files (default: CTX_PT_MODEL_ROOT or /app/models)",
     )
+    parser.add_argument(
+        "--output-dir",
+        default=DEFAULT_OUTPUT_DIR,
+        help="Directory to write .engine files into (default: CTX_ENGINE_ROOT or /app/models/engines)",
+    )
+    parser.add_argument(
+        "--fp16",
+        dest="fp16",
+        action="store_true",
+        default=True,
+        help="FP16 precision (default: True)",
+    )
+    parser.add_argument(
+        "--imgsz",
+        type=int,
+        nargs="+",
+        default=[480, 640],
+        help="Input size as H W (default: 480 640 for landscape camera)",
+    )
+    parser.add_argument(
+        "--workspace",
+        type=int,
+        default=DEFAULT_WORKSPACE_GB,
+        help="TensorRT workspace in GB (default: 2 or ENGINE_WORKSPACE_GB)",
+    )
+    args = parser.parse_args()
 
-    # Move to the configured output location
-    engine_out.parent.mkdir(parents=True, exist_ok=True)
-    if exported_path.resolve() != engine_out.resolve():
-        exported_path.replace(engine_out)
+    model_root = Path(args.root)
+    output_dir = Path(args.output_dir)
+    if not model_root.exists():
+        log.error("Model root not found: %s", model_root)
+        raise SystemExit(1)
 
-    engine_sha = sha256_file(engine_out)
-    meta = {
-        "source_pt": str(pt_path),
-        "engine_path": str(engine_out),
-        "engine_sha256": engine_sha,
-        "img_size": img_size,
-        "half": half,
-        "workspace_gb": workspace_gb,
-        "batch": batch,
-        "format": "TensorRT engine",
-    }
-    meta_path = engine_out.with_suffix(".json")
-    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    pt_files = _iter_pt_files(model_root, output_dir)
+    if not pt_files:
+        log.error("No .pt files found under %s", model_root)
+        raise SystemExit(1)
 
-    print(f"[export_engine] ✓ Engine saved  : {engine_out}")
-    print(f"[export_engine] ✓ Metadata saved: {meta_path}")
-    print(f"[export_engine] ✓ SHA-256       : {engine_sha}")
-    return engine_out
+    output_map = _resolve_outputs(pt_files, output_dir)
+    imgsz = args.imgsz if len(args.imgsz) > 1 else args.imgsz[0]
+
+    os.environ.setdefault("YOLO_OFFLINE", "True")
+    os.environ.setdefault("ULTRALYTICS_TELEMETRY", "0")
+
+    import logging as _logging
+
+    _logging.getLogger("ultralytics").setLevel(_logging.ERROR)
+
+    from ultralytics import YOLO
+
+    failures = 0
+    for pt_path in pt_files:
+        engine_path = output_map[pt_path]
+        log.info(
+            "Exporting %s -> %s [FP16=%s, workspace=%dGB, imgsz=%s]",
+            pt_path,
+            engine_path,
+            args.fp16,
+            args.workspace,
+            imgsz,
+        )
+        model = YOLO(str(pt_path))
+        exported = Path(
+            model.export(
+                format="engine",
+                device=0,
+                half=args.fp16,
+                imgsz=imgsz,
+                workspace=args.workspace,
+                simplify=False,
+                verbose=False,
+            )
+        )
+        if exported.exists() and exported.resolve() != engine_path.resolve():
+            exported.replace(engine_path)
+
+        if engine_path.exists():
+            size_mb = engine_path.stat().st_size / (1024**2)
+            log.info("Engine saved: %s (%.1f MB)", engine_path, size_mb)
+        else:
+            log.error("Export failed -- engine not found at %s", engine_path)
+            failures += 1
+
+    os._exit(1 if failures else 0)
 
 
-def _iter_pt_files(model_root: Path, engine_root: Path) -> list[Path]:
-    pt_files = []
+def _iter_pt_files(model_root: Path, output_dir: Path) -> list[Path]:
+    pt_files: list[Path] = []
     for path in sorted(model_root.rglob("*.pt")):
         try:
-            path.relative_to(engine_root)
+            path.relative_to(output_dir)
             continue
         except ValueError:
             pass
@@ -122,58 +129,21 @@ def _iter_pt_files(model_root: Path, engine_root: Path) -> list[Path]:
     return pt_files
 
 
-def _resolve_multi_engine_outputs(pt_files: list[Path], engine_root: Path) -> dict[Path, Path]:
-    outputs: dict[str, Path] = {}
+def _resolve_outputs(pt_files: list[Path], output_dir: Path) -> dict[Path, Path]:
     mapping: dict[Path, Path] = {}
-    collisions: dict[str, list[str]] = {}
+    seen: dict[str, Path] = {}
 
     for pt_path in pt_files:
         engine_name = f"{pt_path.stem}.engine"
-        engine_out = engine_root / engine_name
-        if engine_name in outputs:
-            collisions.setdefault(engine_name, [str(outputs[engine_name])]).append(str(pt_path))
-            continue
-        outputs[engine_name] = pt_path
-        mapping[pt_path] = engine_out
-
-    if collisions:
-        lines = []
-        for engine_name, paths in sorted(collisions.items()):
-            joined = ", ".join(paths)
-            lines.append(f"{engine_name}: {joined}")
-        print("[export_engine] ERROR: duplicate .pt stems would overwrite engine outputs:", file=sys.stderr)
-        for line in lines:
-            print(f"  - {line}", file=sys.stderr)
-        sys.exit(1)
+        if engine_name in seen:
+            other = seen[engine_name]
+            log.error("Duplicate model stem for engine output: %s and %s", other, pt_path)
+            raise SystemExit(1)
+        seen[engine_name] = pt_path
+        mapping[pt_path] = output_dir / engine_name
 
     return mapping
 
 
-def export_engine() -> list[Path]:
-    pt_model_path_raw = os.environ.get("CTX_PT_MODEL_PATH", "").strip()
-    pt_model_root = Path(os.environ.get("CTX_PT_MODEL_ROOT", "/app/models"))
-    engine_root = Path(os.environ.get("CTX_ENGINE_ROOT", "/app/models/engines"))
-
-    if pt_model_path_raw:
-        pt_path = Path(pt_model_path_raw)
-        engine_out = Path(os.environ.get("CTX_ENGINE_OUTPUT", str(engine_root / f"{pt_path.stem}.engine")))
-        return [export_single_engine(pt_path, engine_out)]
-
-    if not pt_model_root.exists():
-        print(f"[export_engine] ERROR: model root not found: {pt_model_root}", file=sys.stderr)
-        sys.exit(1)
-
-    pt_files = _iter_pt_files(pt_model_root, engine_root)
-    if not pt_files:
-        print(f"[export_engine] ERROR: no .pt files found under {pt_model_root}", file=sys.stderr)
-        sys.exit(1)
-
-    exported_paths: list[Path] = []
-    output_map = _resolve_multi_engine_outputs(pt_files, engine_root)
-    for pt_path in pt_files:
-        exported_paths.append(export_single_engine(pt_path, output_map[pt_path]))
-    return exported_paths
-
-
 if __name__ == "__main__":
-    export_engine()
+    main()
