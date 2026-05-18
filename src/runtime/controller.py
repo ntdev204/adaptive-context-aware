@@ -11,7 +11,12 @@ except ImportError:  # pragma: no cover - Python 3.10 on Jetson
 
 from src.comm.health_monitor import HeartbeatClientDaemon
 from src.runtime.camera import AstraSCameraConfig, AstraSCameraRuntime
-from src.runtime.frame_source import ZmqJpegFrameConfig, ZmqJpegFrameReceiver
+from src.runtime.frame_source import (
+    LocalCameraFrameConfig,
+    LocalCameraFrameSource,
+    ZmqJpegFrameConfig,
+    ZmqJpegFrameReceiver,
+)
 from src.runtime.perception_loop import PerceptionLoopConfig, RuntimePerceptionLoop
 from src.runtime.sensor_store import SensorStore
 from src.transport.zmq_result_publisher import ZmqResultPublisher, ZmqResultPublisherConfig
@@ -53,6 +58,7 @@ class RuntimeConfig:
     camera_width: int = FRAME_WIDTH
     camera_height: int = FRAME_HEIGHT
     camera_fps: int = 30
+    camera_publish_port: int = 5557
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,7 +110,7 @@ class JetsonRuntimeController:
                 bind_port=self.config.result_publish_port,
             )
         )
-        self._frame_receiver: ZmqJpegFrameReceiver | None = self._make_frame_receiver()
+        self._frame_source: LocalCameraFrameSource | ZmqJpegFrameReceiver | None = self._make_frame_source()
         self._perception_loop: RuntimePerceptionLoop | None = None
         self._heartbeat_client: HeartbeatClientDaemon | None = None
 
@@ -115,12 +121,12 @@ class JetsonRuntimeController:
         try:
             self._ingest.start()
             self._result_publisher.start()
-            self._start_frame_receiver()
+            self._start_frame_source()
             self._start_perception_loop()
             self._start_heartbeat()
         except Exception as exc:
             self._stop_perception_loop()
-            self._stop_frame_receiver()
+            self._stop_frame_source()
             self._ingest.stop()
             self._result_publisher.stop()
             self._stop_heartbeat()
@@ -133,7 +139,7 @@ class JetsonRuntimeController:
 
     def stop(self) -> RuntimeStatus:
         self._stop_perception_loop()
-        self._stop_frame_receiver()
+        self._stop_frame_source()
         self._stop_heartbeat()
         self._ingest.stop()
         self._result_publisher.stop()
@@ -189,14 +195,18 @@ class JetsonRuntimeController:
 
     def _camera_available(self) -> bool:
         if self.config.camera_source == "scada_zmq":
-            if self._frame_receiver is None:
+            if self._frame_source is None:
                 return False
-            stats = self._frame_receiver.stats()
+            stats = self._frame_source.stats()
             return (
                 stats.running
                 and stats.last_frame_age_ms is not None
                 and stats.last_frame_age_ms <= self.config.camera_frame_timeout_ms
             )
+        if self.config.camera_source == "device" and self._frame_source is not None:
+            stats = self._frame_source.stats()
+            if stats.running and stats.last_frame_age_ms is not None:
+                return stats.last_frame_age_ms <= self.config.camera_frame_timeout_ms
         try:
             self._camera.assert_available()
         except Exception:
@@ -206,6 +216,8 @@ class JetsonRuntimeController:
     def _camera_wait_reason(self) -> str:
         if self.config.camera_source == "scada_zmq":
             return "waiting for Wheeltec SCADA camera frames"
+        if self.config.camera_source == "device":
+            return "waiting for local Jetson camera frames"
         return "waiting for AstraS RGB-D camera devices"
 
     def _inference_artifact_available(self) -> bool:
@@ -216,28 +228,41 @@ class JetsonRuntimeController:
     def _bind_host(self) -> str:
         return self.config.bind_host or self.config.jetson_host
 
-    def _make_frame_receiver(self) -> ZmqJpegFrameReceiver | None:
-        if self.config.camera_source != "scada_zmq":
-            return None
-        return ZmqJpegFrameReceiver(
-            ZmqJpegFrameConfig(
-                host=self.config.scada_camera_host,
-                port=self.config.scada_camera_port,
+    def _make_frame_source(self) -> LocalCameraFrameSource | ZmqJpegFrameReceiver | None:
+        if self.config.camera_source == "scada_zmq":
+            return ZmqJpegFrameReceiver(
+                ZmqJpegFrameConfig(
+                    host=self.config.scada_camera_host,
+                    port=self.config.scada_camera_port,
+                )
             )
-        )
+        if self.config.camera_source == "device":
+            return LocalCameraFrameSource(
+                LocalCameraFrameConfig(
+                    backend=os.environ.get("CTX_CAMERA_BACKEND", "openni"),
+                    rgb_device=self.config.camera_rgb_device,
+                    width=self.config.camera_width,
+                    height=self.config.camera_height,
+                    fps=self.config.camera_fps,
+                    read_interval_ms=max(1, int(1000 / max(self.config.camera_fps, 1))),
+                    publish_port=self.config.camera_publish_port,
+                    publish_enabled=_env_bool("CTX_CAMERA_PUBLISH_ENABLED", True),
+                )
+            )
+        return None
 
-    def _start_frame_receiver(self) -> None:
-        if self._frame_receiver is not None:
-            self._frame_receiver.start()
+    def _start_frame_source(self) -> None:
+        if self._frame_source is not None:
+            self._frame_source.start()
 
-    def _stop_frame_receiver(self) -> None:
-        if self._frame_receiver is not None:
-            self._frame_receiver.stop()
+    def _stop_frame_source(self) -> None:
+        if self._frame_source is not None:
+            self._frame_source.stop()
 
     def _start_perception_loop(self) -> None:
         if not self.config.perception_enabled or self._perception_loop is not None:
             return
-        if self._frame_receiver is None:
+        if self._frame_source is None:
             return
 
         from src.perception.pipeline import PerceptionPipeline
@@ -245,7 +270,7 @@ class JetsonRuntimeController:
         self._perception_loop = RuntimePerceptionLoop(
             pipeline=PerceptionPipeline(),
             sensor_store=self.sensor_store,
-            frame_source=self._frame_receiver,
+            frame_source=self._frame_source,
             result_publisher=self._result_publisher,
             config=PerceptionLoopConfig(
                 source_id=self.config.result_source_id,
@@ -290,3 +315,10 @@ class JetsonRuntimeController:
 
 def _is_stale(age_ms: float | None, max_age_ms: int) -> bool:
     return age_ms is None or age_ms > max_age_ms
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}

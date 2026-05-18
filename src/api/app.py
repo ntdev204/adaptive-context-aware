@@ -118,6 +118,7 @@ def _load_runtime_config() -> RuntimeConfig:
         camera_width=int(os.environ.get("CTX_ASTRAS_WIDTH", "640")),
         camera_height=int(os.environ.get("CTX_ASTRAS_HEIGHT", "480")),
         camera_fps=int(os.environ.get("CTX_ASTRAS_FPS", "30")),
+        camera_publish_port=int(os.environ.get("CTX_CAMERA_PUBLISH_PORT", "5557")),
     )
 
 

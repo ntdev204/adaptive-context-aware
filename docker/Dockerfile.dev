@@ -9,9 +9,9 @@ ENV PIP_INDEX_URL=https://pypi.org/simple \
     PYTHONUNBUFFERED=1 \
     APP_HOME=/app \
     CTX_CAMERA_BACKEND=openni \
-    CTX_CAMERA_SOURCE=scada_zmq \
-    CTX_ASTRAS_RGB_DEVICE= \
-    CTX_ASTRAS_DEPTH_DEVICE= \
+    CTX_CAMERA_SOURCE=device \
+    CTX_ASTRAS_RGB_DEVICE=/dev/video0 \
+    CTX_ASTRAS_DEPTH_DEVICE=/dev/video1 \
     CTX_AUTOSTART=true \
     CTX_BIND_HOST=0.0.0.0 \
     CTX_JETSON_HOST=127.0.0.1 \
@@ -43,6 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libudev-dev \
     usbutils \
     python-is-python3 \
+    python3-opencv \
     rsync \
     openssh-client \
     && rm -rf /var/lib/apt/lists/*

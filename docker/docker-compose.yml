@@ -3,15 +3,17 @@ name: adaptive-context-aware
 x-adaptive-env: &adaptive-env
   CTX_BIND_HOST: ${CTX_BIND_HOST:-0.0.0.0}
   CTX_CAMERA_BACKEND: ${CTX_CAMERA_BACKEND:-openni}
-  CTX_CAMERA_SOURCE: ${CTX_CAMERA_SOURCE:-scada_zmq}
-  CTX_ASTRAS_DEPTH_DEVICE: ${CTX_ASTRAS_DEPTH_DEVICE:-}
-  CTX_ASTRAS_RGB_DEVICE: ${CTX_ASTRAS_RGB_DEVICE:-}
+  CTX_CAMERA_SOURCE: ${CTX_CAMERA_SOURCE:-device}
+  CTX_ASTRAS_DEPTH_DEVICE: ${CTX_ASTRAS_DEPTH_DEVICE:-/dev/video1}
+  CTX_ASTRAS_RGB_DEVICE: ${CTX_ASTRAS_RGB_DEVICE:-/dev/video0}
   CTX_RUNTIME_BACKEND: ${CTX_RUNTIME_BACKEND:-engine}
   CTX_AUTOSTART: ${CTX_AUTOSTART:-true}
   CTX_JETSON_HOST: ${CTX_JETSON_HOST:-25.12.4.100}
   CTX_PI_HOST: ${CTX_PI_HOST:-25.12.4.101}
   CTX_SCADA_CAMERA_HOST: ${CTX_SCADA_CAMERA_HOST:-${ZMQ_SCADA_HOST:-25.12.4.101}}
   CTX_SCADA_CAMERA_PORT: ${CTX_SCADA_CAMERA_PORT:-5557}
+  CTX_CAMERA_PUBLISH_PORT: ${CTX_CAMERA_PUBLISH_PORT:-5557}
+  CTX_CAMERA_PUBLISH_ENABLED: ${CTX_CAMERA_PUBLISH_ENABLED:-true}
   CTX_CAMERA_FRAME_TIMEOUT_MS: ${CTX_CAMERA_FRAME_TIMEOUT_MS:-2000}
   CTX_SENSOR_INGEST_PORT: ${CTX_SENSOR_INGEST_PORT:-5555}
   CTX_RESULT_PUBLISH_PORT: ${CTX_RESULT_PUBLISH_PORT:-5556}
@@ -63,10 +65,19 @@ services:
     environment:
       <<: *adaptive-env
       CTX_RUNTIME_ROLE: control-api
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-all}
     volumes:
       - ../models:/app/models
+      - ../logs:/app/logs
+      - ../data:/app/data
+      - ../config:/app/config:ro
     network_mode: host
     privileged: true
+    runtime: nvidia
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    restart: unless-stopped
     command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8080"]
 
   dev-control-api:
