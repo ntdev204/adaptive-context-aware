@@ -18,6 +18,8 @@ make compose-up
 Run `rai_website` separately on the laptop. Point it to the Jetson runtime with:
 
 ```bash
+ZMQ_SCADA_HOST=100.120.77.81
+ZMQ_SCADA_HOSTS=100.120.77.81
 ADAPTIVE_API_URL=http://100.69.39.18:8080
 ADAPTIVE_RESULT_HOST=100.69.39.18
 ADAPTIVE_RESULT_PORT=5556
@@ -25,9 +27,9 @@ ADAPTIVE_RESULT_PORT=5556
 
 Default endpoints:
 
-- Wheeltec ROS2 / SCADA host: `25.12.4.101`
-- Adaptive host for Pi/ROS2: `25.12.4.100`
-- Adaptive host for `rai_website`: `100.69.39.18`
+- Raspberry Pi <-> Jetson Ethernet: Pi `25.12.4.101`, Jetson `25.12.4.100`
+- Raspberry Pi <-> `rai_website`: `100.120.77.81`
+- Jetson <-> `rai_website`: `100.69.39.18`
 - Website on laptop: `http://localhost:3000`
 - Backend API on laptop: `http://localhost:8000`
 
@@ -39,7 +41,7 @@ Override hosts when needed:
 
 ```bash
 export CTX_JETSON_HOST="<jetson-ip-for-pi>"
-export ZMQ_SCADA_HOST="<wheeltec-ros2-ip>"
-export CTX_SCADA_CAMERA_HOST="<wheeltec-ros2-ip>"
+export ZMQ_SCADA_HOST="<raspi-ip-for-website>"
+export CTX_SCADA_CAMERA_HOST="<raspi-ethernet-ip-for-jetson>"
 make compose-up
 ```
