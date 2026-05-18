@@ -11,9 +11,10 @@ make compose-up
 
 `make export-engine` reuses `ctx-aware:dev`; there is no separate export-only image anymore.
 
-`make compose-up` on Jetson starts only:
+`make compose-up` on Jetson starts:
 
 - `control-api`: adaptive runtime, ZMQ sensor ingest `5555`, result PUB `5556`, heartbeat `9093`.
+- `mlflow`: lightweight MLOps tracking/logging UI on port `5000`.
 
 Run `rai_website` separately on the laptop. Point it to the Jetson runtime with:
 

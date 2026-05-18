@@ -27,8 +27,10 @@ help:
 	@echo "  compose-down       Stop stack"
 	@echo "  compose-logs       Follow Jetson adaptive runtime logs"
 	@echo "  compose-config     Validate docker compose config"
-	@echo "  build-dev          Alias: docker-build-dev + rai_website build"
-	@echo "  build-prod         Alias: docker-build-prod + rai_website build"
+	@echo "  build-dev          Build adaptive-context-aware development services"
+	@echo "  build-prod         Build adaptive-context-aware production services"
+	@echo "  mlops-up           Start MLflow tracking service"
+	@echo "  mlops-logs         Follow MLflow logs"
 	@echo "  up                 Alias: compose-up"
 	@echo "  down               Alias: compose-down"
 	@echo "  logs               Alias: compose-logs"
@@ -79,10 +81,10 @@ docker-build-prod:
 	$(DOCKER) build -f docker/Dockerfile.prod -t ctx-aware:prod .
 
 build-dev: docker-build-dev
-	$(COMPOSE) build dev-control-api rai-server rai-client
+	$(COMPOSE) build dev-control-api
 
 build-prod: docker-build-prod
-	$(COMPOSE) build control-api rai-server rai-client
+	$(COMPOSE) build control-api
 
 build-engine: docker-build-dev
 
@@ -96,13 +98,19 @@ compose-config:
 	$(COMPOSE) config
 
 compose-up:
-	$(COMPOSE) up -d control-api
+	$(COMPOSE) --profile mlops up -d control-api mlflow
 
 compose-down:
 	$(COMPOSE) down
 
 compose-logs:
-	$(COMPOSE) logs -f control-api
+	$(COMPOSE) logs -f control-api mlflow
+
+mlops-up:
+	$(COMPOSE) --profile mlops up -d mlflow
+
+mlops-logs:
+	$(COMPOSE) logs -f mlflow
 
 config: compose-config
 
