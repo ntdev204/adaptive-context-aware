@@ -23,9 +23,9 @@ help:
 	@echo "  docker-build-dev   Build Jetson-native development image"
 	@echo "  docker-build-prod  Build Jetson-native production image"
 	@echo "  export-engine      Export all .pt models under models/ → TensorRT .engine using ctx-aware:dev"
-	@echo "  compose-up         Start adaptive runtime + rai_website dataset/control stack"
+	@echo "  compose-up         Start Jetson adaptive runtime only"
 	@echo "  compose-down       Stop stack"
-	@echo "  compose-logs       Follow stack logs"
+	@echo "  compose-logs       Follow Jetson adaptive runtime logs"
 	@echo "  compose-config     Validate docker compose config"
 	@echo "  build-dev          Alias: docker-build-dev + rai_website build"
 	@echo "  build-prod         Alias: docker-build-prod + rai_website build"
@@ -96,13 +96,13 @@ compose-config:
 	$(COMPOSE) config
 
 compose-up:
-	$(COMPOSE) up -d control-api rai-postgres rai-server rai-client
+	$(COMPOSE) up -d control-api
 
 compose-down:
 	$(COMPOSE) down
 
 compose-logs:
-	$(COMPOSE) logs -f control-api rai-server rai-client
+	$(COMPOSE) logs -f control-api
 
 config: compose-config
 
