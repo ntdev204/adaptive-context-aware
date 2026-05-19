@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -73,10 +74,9 @@ class _Allocation:
 class _RawTensorRTRunner:
     def __init__(self, engine_path: Path, input_names: tuple[str, ...]) -> None:
         import tensorrt as trt
-        from cuda import cudart
 
         self.trt = trt
-        self.cudart = cudart
+        self.cudart = _load_cudart_module()
         self.logger = trt.Logger(trt.Logger.WARNING)
         runtime = trt.Runtime(self.logger)
         self.engine = runtime.deserialize_cuda_engine(engine_path.read_bytes())
@@ -216,3 +216,32 @@ class _RawTensorRTRunner:
         error = result[0] if isinstance(result, tuple) else result
         if int(getattr(error, "value", error)) != 0:
             raise RuntimeError(f"{operation} failed with CUDA error {error}")
+
+
+def _load_cudart_module() -> object:
+    errors: list[str] = []
+    candidates = (
+        ("cuda", "cudart"),
+        ("cuda.bindings", "runtime"),
+        ("cuda.cuda", None),
+    )
+    for module_name, attribute_name in candidates:
+        try:
+            module = importlib.import_module(module_name)
+        except Exception as exc:
+            errors.append(f"{module_name}: {exc}")
+            continue
+        candidate = getattr(module, attribute_name) if attribute_name is not None else module
+        if _looks_like_cudart(candidate):
+            return candidate
+        errors.append(f"{module_name}: missing cuda runtime symbols")
+    raise RuntimeError(
+        "could not import CUDA runtime bindings; tried "
+        + ", ".join(module for module, _ in candidates)
+        + f" ({'; '.join(errors)})"
+    )
+
+
+def _looks_like_cudart(candidate: object) -> bool:
+    required = ("cudaMalloc", "cudaMemcpy", "cudaDeviceSynchronize", "cudaFree", "cudaMemcpyKind")
+    return all(hasattr(candidate, name) for name in required)
