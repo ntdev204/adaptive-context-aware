@@ -145,6 +145,7 @@ class LocalCameraFrameSource:
         self._capture = None
         self._openni2 = None
         self._oni_device = None
+        self._oni_depth_stream = None
         self._oni_color_stream = None
 
     def start(self) -> None:
@@ -258,6 +259,16 @@ class LocalCameraFrameSource:
         if self._oni_device is None:
             joined = "; ".join(init_errors) if init_errors else "no OpenNI2 redist candidates found"
             raise RuntimeError(f"failed to open OpenNI device: {joined}")
+        self._oni_depth_stream = self._oni_device.create_depth_stream()
+        self._oni_depth_stream.set_video_mode(
+            self._openni2.c_api.OniVideoMode(
+                pixelFormat=self._openni2.PIXEL_FORMAT_DEPTH_1_MM,
+                resolutionX=self.config.width,
+                resolutionY=self.config.height,
+                fps=self.config.fps,
+            )
+        )
+        self._oni_depth_stream.start()
         self._oni_color_stream = self._oni_device.create_color_stream()
         self._oni_color_stream.set_video_mode(
             self._openni2.c_api.OniVideoMode(
@@ -268,6 +279,10 @@ class LocalCameraFrameSource:
             )
         )
         self._oni_color_stream.start()
+        try:
+            self._oni_device.set_image_registration_mode(self._openni2.IMAGE_REGISTRATION_DEPTH_TO_COLOR)
+        except Exception:
+            pass
 
     def _open_cv_capture(self, cv2):
         capture = cv2.VideoCapture(self.config.rgb_device or "/dev/video0")
@@ -299,6 +314,9 @@ class LocalCameraFrameSource:
         if self._oni_color_stream is not None:
             self._oni_color_stream.stop()
             self._oni_color_stream = None
+        if self._oni_depth_stream is not None:
+            self._oni_depth_stream.stop()
+            self._oni_depth_stream = None
         if self._oni_device is not None:
             self._oni_device.close()
             self._oni_device = None

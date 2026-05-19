@@ -9,7 +9,7 @@ make export-engine
 make compose-up
 ```
 
-`make export-engine` reuses `ctx-aware:dev`; there is no separate export-only image anymore.
+`make export-engine` reuses `context-aware:jetson-dev`; there is no separate export-only image anymore.
 
 `make compose-up` on Jetson starts:
 

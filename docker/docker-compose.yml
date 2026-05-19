@@ -32,18 +32,22 @@ x-default-logging: &default-logging
     max-file: ${DOCKER_LOG_MAX_FILE:-3}
 
 services:
-  control-api:
-    image: ctx-aware:prod
+  jetson-prod:
+    image: context-aware:jetson-prod
     build:
       context: ..
-      dockerfile: docker/Dockerfile.prod
+      dockerfile: docker/Dockerfile.jetson
+      target: jetson-prod
     environment:
       <<: *adaptive-env
-      CTX_RUNTIME_ROLE: control-api
+      CTX_RUNTIME_ROLE: jetson-prod
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
       NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-all}
+      CUDA_MODULE_LOADING: ${CUDA_MODULE_LOADING:-LAZY}
+      PYTHONPATH: /app
     volumes:
       - ../models:/app/models
+      - ../models/torch_cache:/data/models/torch
       - ../logs:/app/logs
       - ../data:/app/data
       - ../config:/app/config:ro
@@ -62,7 +66,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8080"]
+    mem_limit: 3g
+    memswap_limit: 4g
 
   mlflow:
     image: python:3.10-slim
@@ -97,43 +102,41 @@ services:
         --host "$${MLFLOW_HOST}"
         --port "$${MLFLOW_PORT}"
 
-  dev-control-api:
-    profiles: ["dev"]
-    image: ctx-aware:dev
+  jetson-dev:
+    profiles: ["jetson-dev"]
+    image: context-aware:jetson-dev
     build:
       context: ..
-      dockerfile: docker/Dockerfile.dev
+      dockerfile: docker/Dockerfile.jetson
+      target: jetson-dev
     environment:
       <<: *adaptive-env
-      CTX_RUNTIME_ROLE: dev-control-api
-      CTX_JETSON_HOST: ${CTX_JETSON_HOST:-127.0.0.1}
-      CTX_PI_HOST: ${CTX_PI_HOST:-127.0.0.2}
-      CTX_SCADA_CAMERA_HOST: ${CTX_SCADA_CAMERA_HOST:-127.0.0.2}
+      CTX_RUNTIME_ROLE: jetson-dev
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-all}
+      CUDA_MODULE_LOADING: ${CUDA_MODULE_LOADING:-LAZY}
+      PYTHONPATH: /app
     volumes:
-      - ../src:/app/src
-      - ../config:/app/config
-      - ../scripts:/app/scripts
-      - ../models:/app/models
-      - ../logs:/app/logs
-      - ../data:/app/data
+      - ..:/app
       - /run/udev:/run/udev:ro
-    ports:
-      - "8080:8080"
-      - "5555:5555"
-      - "5556:5556"
-      - "5557:5557"
+    network_mode: host
     privileged: true
+    runtime: nvidia
     devices:
       - /dev/bus/usb:/dev/bus/usb
       - /dev:/dev
     logging: *default-logging
-    command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8080"]
+    command: /bin/bash
+    stdin_open: true
+    tty: true
+    restart: "no"
 
   monitor:
     profiles: ["ci"]
     build:
       context: ..
-      dockerfile: docker/Dockerfile.dev
+      dockerfile: docker/Dockerfile.jetson
+      target: jetson-dev
     environment:
       CTX_RUNTIME_ROLE: monitor
     volumes:
@@ -146,9 +149,11 @@ services:
 
   watchdog:
     profiles: ["debug"]
+    image: context-aware:jetson-dev
     build:
       context: ..
-      dockerfile: docker/Dockerfile.dev
+      dockerfile: docker/Dockerfile.jetson
+      target: jetson-dev
     environment:
       <<: *adaptive-env
       CTX_RUNTIME_ROLE: watchdog
@@ -162,7 +167,7 @@ services:
 
   synthetic-h5:
     profiles: ["dataset"]
-    image: ctx-aware:dev
+    image: context-aware:jetson-dev
     environment:
       CTX_RUNTIME_ROLE: synthetic-h5
       SYNTHETIC_RAW_DIR: ${SYNTHETIC_RAW_DIR:-data/raw}
