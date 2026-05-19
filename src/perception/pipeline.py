@@ -53,10 +53,14 @@ from .tracker import MultiObjectTracker
 
 _FLAT_DEPTH_Z_M = 5.0  # assumed depth when no real depth map is available
 
+# Pre-allocated constant — avoids 1.2MB numpy allocation every frame
+_FLAT_DEPTH_CACHE: np.ndarray = np.full(DEPTH_SHAPE_HW, _FLAT_DEPTH_Z_M, dtype=np.float32)
+_FLAT_DEPTH_CACHE.flags.writeable = False  # immutable to prevent accidental mutation
+
 
 def _make_flat_depth() -> np.ndarray:
-    """Return a constant-depth plane (all pixels = _FLAT_DEPTH_Z_M)."""
-    return np.full(DEPTH_SHAPE_HW, _FLAT_DEPTH_Z_M, dtype=np.float32)
+    """Return a read-only constant-depth plane (all pixels = _FLAT_DEPTH_Z_M)."""
+    return _FLAT_DEPTH_CACHE
 
 
 @dataclass(slots=True)
@@ -136,6 +140,7 @@ class PerceptionPipeline:
         """
         timings: dict[str, float] = {}
 
+        # Use pre-allocated cache — zero allocation when no real depth map
         if depth_map_m is None:
             depth_map_m = _make_flat_depth()
 
@@ -158,10 +163,6 @@ class PerceptionPipeline:
         lidar_clusters = self.lidar_processor.cluster_scan(lidar_scan) if lidar_scan is not None else []
         fused = self.sensor_fusion.fuse(tracks, ego_motion, lidar_clusters)
         timings["fusion_ms"] = (perf_counter() - start) * 1000.0
-
-        start = perf_counter()
-        _features = [self.feature_extractor.extract(entity) for entity in fused]
-        timings["feature_ms"] = (perf_counter() - start) * 1000.0
 
         timings["total_ms"] = sum(timings.values())
         return fused, timings
