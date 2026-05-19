@@ -204,9 +204,18 @@ class JetsonRuntimeController:
                 and stats.last_frame_age_ms <= self.config.camera_frame_timeout_ms
             )
         if self.config.camera_source == "device" and self._frame_source is not None:
+            if self._state is RuntimeState.STOPPED:
+                try:
+                    self._camera.assert_available()
+                except Exception:
+                    return False
+                return True
             stats = self._frame_source.stats()
-            if stats.running and stats.last_frame_age_ms is not None:
-                return stats.last_frame_age_ms <= self.config.camera_frame_timeout_ms
+            return (
+                stats.running
+                and stats.last_frame_age_ms is not None
+                and stats.last_frame_age_ms <= self.config.camera_frame_timeout_ms
+            )
         try:
             self._camera.assert_available()
         except Exception:
