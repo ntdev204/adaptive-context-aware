@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import threading
 import time
 from dataclasses import dataclass
@@ -240,10 +241,23 @@ class LocalCameraFrameSource:
         except ImportError as exc:
             raise RuntimeError("python package 'openni' is not installed in the container") from exc
 
-        redist = "/usr/lib"
         self._openni2 = openni2
-        self._openni2.initialize(redist if _path_exists(redist) else None)
-        self._oni_device = self._openni2.Device.open_any()
+        init_errors: list[str] = []
+        for redist in _openni_redist_candidates():
+            try:
+                self._openni2.initialize(redist)
+                self._oni_device = self._openni2.Device.open_any()
+                break
+            except Exception as exc:
+                init_errors.append(f"{redist or '<default>'}: {type(exc).__name__}")
+                try:
+                    self._openni2.unload()
+                except Exception:
+                    pass
+                self._oni_device = None
+        if self._oni_device is None:
+            joined = "; ".join(init_errors) if init_errors else "no OpenNI2 redist candidates found"
+            raise RuntimeError(f"failed to open OpenNI device: {joined}")
         self._oni_color_stream = self._oni_device.create_color_stream()
         self._oni_color_stream.set_video_mode(
             self._openni2.c_api.OniVideoMode(
@@ -307,3 +321,19 @@ def _path_exists(path: str) -> bool:
     from pathlib import Path
 
     return Path(path).exists()
+
+
+def _openni_redist_candidates() -> list[str | None]:
+    candidates: list[str | None] = []
+    for value in (
+        os.environ.get("OPENNI2_REDIST"),
+        os.path.join(os.environ.get("OPENNI_SDK_ROOT", "/opt/orbbec/openni"), "Redist"),
+        "/usr/lib",
+        None,
+    ):
+        if value is None:
+            candidates.append(None)
+            continue
+        if _path_exists(value) and value not in candidates:
+            candidates.append(value)
+    return candidates
