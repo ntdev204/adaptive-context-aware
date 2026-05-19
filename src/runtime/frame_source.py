@@ -223,7 +223,7 @@ class LocalCameraFrameSource:
 
                 if self._publisher is not None:
                     self._publisher.send(payload)
-                time.sleep(interval_s)
+                # No sleep here — camera driver/read_frame() already rate-limits to camera FPS
         except Exception as exc:
             with self._lock:
                 self._last_error = str(exc)

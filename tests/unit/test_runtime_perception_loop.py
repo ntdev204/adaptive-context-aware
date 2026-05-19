@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 import numpy as np
 
 from src.perception.sensor_fusion import FusedEntity
@@ -30,7 +31,7 @@ def test_build_result_message_maps_fused_entities_to_result_plane() -> None:
 
     assert message.source_id == "adaptive-runtime"
     assert message.sequence == 11
-    assert message.metrics.fps == 100.0
+    assert message.metrics.fps == pytest.approx(125.0)  # 1000 / (total_ms - camera_ms) = 1000/8
     assert message.entities[0].track_id == 7
     np.testing.assert_allclose(message.entities[0].bbox_xywh, entity.bbox_xywh)
     np.testing.assert_allclose(message.entities[0].position_xyz_m, entity.position_3d)

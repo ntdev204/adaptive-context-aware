@@ -40,7 +40,7 @@ class RuntimeConfig:
     pi_host: str = "25.12.4.101"
     runtime_backend: str = "engine"
     perception_enabled: bool = True
-    perception_interval_ms: int = 100
+    perception_interval_ms: int = 33  # ~30 FPS (was 100ms = max 10 FPS)
     result_source_id: str = "adaptive-runtime"
     sensor_ingest_port: int = 5555
     result_publish_port: int = 5556
