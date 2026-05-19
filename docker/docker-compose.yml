@@ -47,11 +47,13 @@ services:
       - ../logs:/app/logs
       - ../data:/app/data
       - ../config:/app/config:ro
+      - /run/udev:/run/udev:ro
     network_mode: host
     privileged: true
     runtime: nvidia
     devices:
       - /dev/bus/usb:/dev/bus/usb
+      - /dev:/dev
     restart: unless-stopped
     logging: *default-logging
     healthcheck:
@@ -114,12 +116,16 @@ services:
       - ../models:/app/models
       - ../logs:/app/logs
       - ../data:/app/data
+      - /run/udev:/run/udev:ro
     ports:
       - "8080:8080"
       - "5555:5555"
       - "5556:5556"
       - "5557:5557"
     privileged: true
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+      - /dev:/dev
     logging: *default-logging
     command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8080"]
 
