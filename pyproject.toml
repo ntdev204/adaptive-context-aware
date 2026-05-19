@@ -40,6 +40,7 @@ rl = [
 ]
 engine = [
     # TensorRT / torch-tensorrt / CUDA Python bindings are provided by the Jetson runtime image.
+    "cuda-python",
     "openni>=2.3.0",
     "ultralytics>=8.3.0",
 ]
