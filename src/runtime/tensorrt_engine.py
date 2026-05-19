@@ -228,10 +228,10 @@ def _load_cudart_module() -> object:
     for module_name, attribute_name in candidates:
         try:
             module = importlib.import_module(module_name)
+            candidate = getattr(module, attribute_name) if attribute_name is not None else module
         except Exception as exc:
             errors.append(f"{module_name}: {exc}")
             continue
-        candidate = getattr(module, attribute_name) if attribute_name is not None else module
         if _looks_like_cudart(candidate):
             return candidate
         errors.append(f"{module_name}: missing cuda runtime symbols")
