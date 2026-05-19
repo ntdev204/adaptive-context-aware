@@ -29,7 +29,7 @@ ENV PIP_INDEX_URL=https://pypi.org/simple \
     CTX_ENGINE_MODEL_PATH=/app/models/engines/best.engine \
     CTX_TRACKER_CONFIG_PATH=/app/models/fine_tuning/botsort_tuned.json \
     OPENNI_SDK_ROOT=/opt/orbbec/openni \
-    OPENNI2_REDIST=/opt/orbbec/openni/Redist \
+    OPENNI2_REDIST=/usr/lib \
     OPENNI2_DRIVERS_PATH=/usr/lib/OpenNI2/Drivers \
     YOLO_OFFLINE=True \
     ULTRALYTICS_TELEMETRY=0 \
@@ -60,6 +60,7 @@ RUN mkdir -p /tmp/orbbec && \
     mkdir -p /usr/lib/OpenNI2/Drivers /opt/orbbec/openni/lib /opt/orbbec/openni/Redist && \
     cp /tmp/orbbec/include/openni2_redist/arm64/libOpenNI2.so /usr/lib/libOpenNI2.so && \
     cp /tmp/orbbec/include/openni2_redist/arm64/libOpenNI2.so /opt/orbbec/openni/lib/libOpenNI2.so && \
+    cp /tmp/orbbec/include/openni2_redist/arm64/libOpenNI2.so /opt/orbbec/openni/Redist/libOpenNI2.so && \
     cp -r /tmp/orbbec/include/openni2_redist/arm64/OpenNI2 /opt/orbbec/openni/Redist/ && \
     cp -r /tmp/orbbec/include/openni2_redist/arm64/OpenNI2/Drivers/* /usr/lib/OpenNI2/Drivers/ && \
     ldconfig && \

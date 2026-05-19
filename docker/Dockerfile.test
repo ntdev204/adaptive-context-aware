@@ -16,7 +16,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     CTX_RESULT_PUBLISH_PORT=5556 \
     CTX_SENSOR_INGEST_PORT=5555 \
     OPENNI_SDK_ROOT=/opt/orbbec/openni \
-    OPENNI2_REDIST=/opt/orbbec/openni/Redist \
+    OPENNI2_REDIST=/usr/lib \
     OPENNI2_DRIVERS_PATH=/usr/lib/OpenNI2/Drivers \
     LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/nvidia:/usr/lib/aarch64-linux-gnu/tegra:/opt/orbbec/openni/lib:/opt/orbbec/openni/Redist:${LD_LIBRARY_PATH}
 
@@ -40,6 +40,7 @@ RUN mkdir -p /tmp/orbbec && \
     mkdir -p /usr/lib/OpenNI2/Drivers /opt/orbbec/openni/lib /opt/orbbec/openni/Redist && \
     cp /tmp/orbbec/include/openni2_redist/arm64/libOpenNI2.so /usr/lib/libOpenNI2.so && \
     cp /tmp/orbbec/include/openni2_redist/arm64/libOpenNI2.so /opt/orbbec/openni/lib/libOpenNI2.so && \
+    cp /tmp/orbbec/include/openni2_redist/arm64/libOpenNI2.so /opt/orbbec/openni/Redist/libOpenNI2.so && \
     cp -r /tmp/orbbec/include/openni2_redist/arm64/OpenNI2 /opt/orbbec/openni/Redist/ && \
     cp -r /tmp/orbbec/include/openni2_redist/arm64/OpenNI2/Drivers/* /usr/lib/OpenNI2/Drivers/ && \
     ldconfig && \
