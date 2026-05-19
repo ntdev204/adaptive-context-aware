@@ -16,6 +16,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     CTX_RESULT_PUBLISH_PORT=5556 \
     CTX_SENSOR_INGEST_PORT=5555 \
     OPENNI_SDK_ROOT=/opt/orbbec/openni \
+    OPENNI2_REDIST=/opt/orbbec/openni/Redist \
+    OPENNI2_DRIVERS_PATH=/usr/lib/OpenNI2/Drivers \
     LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/nvidia:/usr/lib/aarch64-linux-gnu/tegra:/opt/orbbec/openni/lib:/opt/orbbec/openni/Redist:${LD_LIBRARY_PATH}
 
 WORKDIR ${APP_HOME}

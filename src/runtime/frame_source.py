@@ -4,6 +4,7 @@ import threading
 import time
 from dataclasses import dataclass
 
+import numpy as np
 import zmq
 
 
@@ -140,6 +141,10 @@ class LocalCameraFrameSource:
         self._latest: CameraFrame | None = None
         self._frames_received = 0
         self._last_error: str | None = None
+        self._capture = None
+        self._openni2 = None
+        self._oni_device = None
+        self._oni_color_stream = None
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -157,6 +162,7 @@ class LocalCameraFrameSource:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=timeout_s)
+        self._close_camera()
         if self._publisher:
             self._publisher.close(linger=0)
             self._publisher = None
@@ -181,14 +187,12 @@ class LocalCameraFrameSource:
     def _run(self) -> None:
         import cv2
 
-        capture = self._open_capture(cv2)
         try:
-            if not capture.isOpened():
-                raise RuntimeError(f"failed to open local camera backend={self.config.backend}")
+            self._open_camera(cv2)
             encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), int(self.config.jpeg_quality)]
             interval_s = max(self.config.read_interval_ms, 1) / 1000.0
             while not self._stop_event.is_set():
-                ok, frame = self._read_frame(cv2, capture)
+                ok, frame = self._read_frame(cv2)
                 if not ok or frame is None:
                     with self._lock:
                         self._last_error = f"camera read failed backend={self.config.backend}"
@@ -222,34 +226,84 @@ class LocalCameraFrameSource:
             with self._lock:
                 self._last_error = str(exc)
         finally:
-            capture.release()
+            self._close_camera()
 
-    def _open_capture(self, cv2):
+    def _open_camera(self, cv2) -> None:
         if self.config.backend == "openni":
-            api_preference = getattr(cv2, "CAP_OPENNI2", 0)
-            capture = cv2.VideoCapture(api_preference)
-            if capture.isOpened():
-                return capture
-            capture.release()
-            with self._lock:
-                self._last_error = "OpenNI backend did not open; falling back to RGB device capture"
-            capture = cv2.VideoCapture(self.config.rgb_device or "/dev/video0")
-        else:
-            capture = cv2.VideoCapture(self.config.rgb_device or "/dev/video0")
+            self._open_openni_camera()
+            return
+        self._capture = self._open_cv_capture(cv2)
 
+    def _open_openni_camera(self) -> None:
+        try:
+            from openni import openni2
+        except ImportError as exc:
+            raise RuntimeError("python package 'openni' is not installed in the container") from exc
+
+        redist = "/usr/lib"
+        self._openni2 = openni2
+        self._openni2.initialize(redist if _path_exists(redist) else None)
+        self._oni_device = self._openni2.Device.open_any()
+        self._oni_color_stream = self._oni_device.create_color_stream()
+        self._oni_color_stream.set_video_mode(
+            self._openni2.c_api.OniVideoMode(
+                pixelFormat=self._openni2.PIXEL_FORMAT_RGB888,
+                resolutionX=self.config.width,
+                resolutionY=self.config.height,
+                fps=self.config.fps,
+            )
+        )
+        self._oni_color_stream.start()
+
+    def _open_cv_capture(self, cv2):
+        capture = cv2.VideoCapture(self.config.rgb_device or "/dev/video0")
         capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.config.width)
         capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config.height)
         capture.set(cv2.CAP_PROP_FPS, self.config.fps)
+        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        if not capture.isOpened():
+            raise RuntimeError(f"failed to open local camera backend={self.config.backend}")
         return capture
 
-    def _read_frame(self, cv2, capture):
+    def _read_frame(self, cv2):
         if self.config.backend == "openni":
-            if not capture.grab():
+            if self._oni_color_stream is None:
                 return False, None
-            ok, frame = capture.retrieve(None, getattr(cv2, "CAP_OPENNI_BGR_IMAGE", 5))
-            return ok, frame
-        return capture.read()
+            try:
+                color_frame = self._oni_color_stream.read_frame()
+                rgb_buf = np.frombuffer(color_frame.get_buffer_as_uint8(), dtype=np.uint8)
+                frame = rgb_buf.reshape(self.config.height, self.config.width, 3)
+                bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                return True, bgr
+            except Exception:
+                return False, None
+        if self._capture is None:
+            return False, None
+        return self._capture.read()
+
+    def _close_camera(self) -> None:
+        if self._oni_color_stream is not None:
+            self._oni_color_stream.stop()
+            self._oni_color_stream = None
+        if self._oni_device is not None:
+            self._oni_device.close()
+            self._oni_device = None
+        if self._openni2 is not None:
+            try:
+                self._openni2.unload()
+            except Exception:
+                pass
+            self._openni2 = None
+        if self._capture is not None:
+            self._capture.release()
+            self._capture = None
 
 
 def _looks_like_jpeg(payload: bytes) -> bool:
     return len(payload) > 4 and payload.startswith(b"\xff\xd8") and payload.endswith(b"\xff\xd9")
+
+
+def _path_exists(path: str) -> bool:
+    from pathlib import Path
+
+    return Path(path).exists()
