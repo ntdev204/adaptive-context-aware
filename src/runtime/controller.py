@@ -36,7 +36,7 @@ class RuntimeState(StrEnum):
 @dataclass(frozen=True, slots=True)
 class RuntimeConfig:
     bind_host: str | None = None
-    jetson_host: str = "127.0.0.1"
+    jetson_host: str = "25.12.4.100"
     pi_host: str = "25.12.4.101"
     runtime_backend: str = "engine"
     perception_enabled: bool = True

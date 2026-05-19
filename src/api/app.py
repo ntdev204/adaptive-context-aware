@@ -41,7 +41,7 @@ def create_app(controller: JetsonRuntimeController | None = None) -> FastAPI:
     @app.get("/config", response_model=RuntimeConfigResponse)
     def config() -> RuntimeConfigResponse:
         runtime_config = runtime.config
-        jetson_host = runtime_config.jetson_host
+        jetson_host = _public_jetson_host(runtime_config)
         scada_camera_endpoint = None
         if runtime_config.camera_source == "scada_zmq":
             scada_camera_endpoint = f"tcp://{runtime_config.scada_camera_host}:{runtime_config.scada_camera_port}"
@@ -64,6 +64,7 @@ def create_app(controller: JetsonRuntimeController | None = None) -> FastAPI:
     def metrics() -> RuntimeMetricsResponse:
         status = runtime.status()
         ingest = status.ingest
+        jetson_host = _public_jetson_host(runtime.config)
         return RuntimeMetricsResponse(
             state=status.state.value,
             ready=status.ready,
@@ -74,8 +75,8 @@ def create_app(controller: JetsonRuntimeController | None = None) -> FastAPI:
             frames_processed=status.frames_processed,
             last_result_age_ms=status.last_result_age_ms,
             last_runtime_error=status.last_runtime_error,
-            sensor_ingest_endpoint=ingest.endpoint,
-            result_publish_endpoint=status.result_endpoint,
+            sensor_ingest_endpoint=f"tcp://{jetson_host}:{runtime.config.sensor_ingest_port}",
+            result_publish_endpoint=f"tcp://{jetson_host}:{runtime.config.result_publish_port}",
             heartbeat_endpoint=status.heartbeat_endpoint,
             messages_received=ingest.messages_received,
             decode_errors=ingest.decode_errors,
@@ -96,7 +97,7 @@ def create_app(controller: JetsonRuntimeController | None = None) -> FastAPI:
 def _load_runtime_config() -> RuntimeConfig:
     return RuntimeConfig(
         bind_host=os.environ.get("CTX_BIND_HOST"),
-        jetson_host=os.environ.get("CTX_JETSON_HOST", "127.0.0.1"),
+        jetson_host=os.environ.get("CTX_JETSON_HOST", "25.12.4.100"),
         pi_host=os.environ.get("CTX_PI_HOST", "25.12.4.101"),
         runtime_backend=os.environ.get("CTX_RUNTIME_BACKEND", "engine"),
         perception_enabled=_env_bool("CTX_PERCEPTION_ENABLED", True),
@@ -128,6 +129,10 @@ def _control_response(status: RuntimeStatus) -> RuntimeControlResponse:
         ready=status.ready,
         reason=status.reason,
     )
+
+
+def _public_jetson_host(config: RuntimeConfig) -> str:
+    return config.jetson_host
 
 
 def _env_bool(name: str, default: bool) -> bool:
