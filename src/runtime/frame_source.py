@@ -53,6 +53,7 @@ class FrameSourceStats:
     endpoint: str
     frames_received: int
     last_frame_age_ms: float | None
+    last_error: str | None = None
 
 
 class ZmqJpegFrameReceiver:
@@ -103,6 +104,7 @@ class ZmqJpegFrameReceiver:
                 endpoint=self.config.endpoint,
                 frames_received=self._frames_received,
                 last_frame_age_ms=age_ms,
+                last_error=None,
             )
 
     def _run(self) -> None:
@@ -173,6 +175,7 @@ class LocalCameraFrameSource:
                 endpoint=self.config.endpoint,
                 frames_received=self._frames_received,
                 last_frame_age_ms=age_ms,
+                last_error=self._last_error,
             )
 
     def _run(self) -> None:
@@ -180,16 +183,22 @@ class LocalCameraFrameSource:
 
         capture = self._open_capture(cv2)
         try:
+            if not capture.isOpened():
+                raise RuntimeError(f"failed to open local camera backend={self.config.backend}")
             encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), int(self.config.jpeg_quality)]
             interval_s = max(self.config.read_interval_ms, 1) / 1000.0
             while not self._stop_event.is_set():
                 ok, frame = self._read_frame(cv2, capture)
                 if not ok or frame is None:
+                    with self._lock:
+                        self._last_error = f"camera read failed backend={self.config.backend}"
                     time.sleep(interval_s)
                     continue
 
                 ok, encoded = cv2.imencode(".jpg", frame, encode_params)
                 if not ok:
+                    with self._lock:
+                        self._last_error = "failed to encode camera frame as JPEG"
                     time.sleep(interval_s)
                     continue
 
@@ -222,6 +231,8 @@ class LocalCameraFrameSource:
             if capture.isOpened():
                 return capture
             capture.release()
+            with self._lock:
+                self._last_error = "OpenNI backend did not open; falling back to RGB device capture"
             capture = cv2.VideoCapture(self.config.rgb_device or "/dev/video0")
         else:
             capture = cv2.VideoCapture(self.config.rgb_device or "/dev/video0")

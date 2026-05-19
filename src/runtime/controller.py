@@ -217,6 +217,10 @@ class JetsonRuntimeController:
         if self.config.camera_source == "scada_zmq":
             return "waiting for Wheeltec SCADA camera frames"
         if self.config.camera_source == "device":
+            if self._frame_source is not None:
+                stats = self._frame_source.stats()
+                if stats.last_error:
+                    return stats.last_error
             return "waiting for local Jetson camera frames"
         return "waiting for AstraS RGB-D camera devices"
 
