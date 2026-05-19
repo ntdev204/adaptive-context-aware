@@ -221,8 +221,9 @@ class _RawTensorRTRunner:
 def _load_cudart_module() -> object:
     errors: list[str] = []
     candidates = (
+        ("cuda.bindings.runtime", None),
+        ("cuda.cudart", None),
         ("cuda", "cudart"),
-        ("cuda.bindings", "runtime"),
         ("cuda.cuda", None),
     )
     for module_name, attribute_name in candidates:
