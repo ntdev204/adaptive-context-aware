@@ -104,7 +104,7 @@ def test_detector_engine_backend_wraps_runtime_errors(tmp_path) -> None:
         detector.detect(frame, frame_id=0)
 
 
-def test_detector_engine_backend_falls_back_to_pt_when_available(tmp_path, monkeypatch) -> None:
+def test_detector_engine_backend_does_not_fallback_to_pt(tmp_path, monkeypatch) -> None:
     class BadRuntime:
         def run(self, input_batch: np.ndarray) -> np.ndarray:
             del input_batch
@@ -118,13 +118,11 @@ def test_detector_engine_backend_falls_back_to_pt_when_available(tmp_path, monke
         DetectorConfig(engine_path=engine_path, pt_model_path=pt_model_path),
         runtime=BadRuntime(),
     )
-    fallback_detections = np.array([[1.0, 2.0, 3.0, 4.0, 0.8, 0.0]], dtype=np.float32)
-    monkeypatch.setattr(detector, "_infer_pt", lambda frame: fallback_detections)
+    fallback = np.array([[1.0, 2.0, 3.0, 4.0, 0.8, 0.0]], dtype=np.float32)
+    monkeypatch.setattr(detector, "_infer_pt", lambda frame: fallback)
 
-    result = detector.detect(np.zeros((480, 640, 3), dtype=np.uint8), frame_id=0)
-
-    assert result.backend == "pt"
-    np.testing.assert_allclose(result.detections, fallback_detections)
+    with pytest.raises(TensorRTInferenceUnavailableError, match="cuda unavailable"):
+        detector.detect(np.zeros((480, 640, 3), dtype=np.uint8), frame_id=0)
 
 
 def test_detector_raises_when_engine_missing() -> None:

@@ -8,6 +8,8 @@ from dataclasses import dataclass
 import numpy as np
 import zmq
 
+MAX_JPEG_BYTES = 4 * 1024 * 1024
+
 
 @dataclass(frozen=True, slots=True)
 class CameraFrame:
@@ -15,6 +17,8 @@ class CameraFrame:
     sequence: int
     timestamp_us: int
     received_monotonic: float
+    frame_bgr: np.ndarray | None = None
+    depth_map_m: np.ndarray | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +74,7 @@ class ZmqJpegFrameReceiver:
         self._lock = threading.Lock()
         self._latest: CameraFrame | None = None
         self._frames_received = 0
+        self.frame_ready = threading.Event()
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -116,7 +121,7 @@ class ZmqJpegFrameReceiver:
                 raw = self._socket.recv()
             except zmq.Again:
                 continue
-            if not _looks_like_jpeg(raw):
+            if not _looks_like_jpeg(raw) or len(raw) > MAX_JPEG_BYTES:
                 continue
             now = time.monotonic()
             with self._lock:
@@ -127,6 +132,7 @@ class ZmqJpegFrameReceiver:
                     timestamp_us=int(time.time() * 1_000_000),
                     received_monotonic=now,
                 )
+            self.frame_ready.set()
 
 
 class LocalCameraFrameSource:
@@ -147,6 +153,7 @@ class LocalCameraFrameSource:
         self._oni_device = None
         self._oni_depth_stream = None
         self._oni_color_stream = None
+        self.frame_ready = threading.Event()
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -186,29 +193,41 @@ class LocalCameraFrameSource:
                 last_error=self._last_error,
             )
 
-    def _run(self) -> None:
-        import cv2
+    def _run(self, cv2=None) -> None:
+        if cv2 is None:
+            import cv2
 
         try:
             self._open_camera(cv2)
             encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), int(self.config.jpeg_quality)]
             interval_s = max(self.config.read_interval_ms, 1) / 1000.0
             while not self._stop_event.is_set():
-                ok, frame = self._read_frame(cv2)
-                if not ok or frame is None:
+                loop_start = time.monotonic()
+                ok, frame_bgr, depth_map_m = self._read_frame(cv2)
+                if not ok or frame_bgr is None:
                     with self._lock:
                         self._last_error = f"camera read failed backend={self.config.backend}"
                     time.sleep(interval_s)
                     continue
 
-                ok, encoded = cv2.imencode(".jpg", frame, encode_params)
-                if not ok:
-                    with self._lock:
-                        self._last_error = "failed to encode camera frame as JPEG"
-                    time.sleep(interval_s)
-                    continue
+                payload = b""
+                if self._publisher is not None:
+                    ok, encoded = cv2.imencode(".jpg", frame_bgr, encode_params)
+                    if not ok:
+                        with self._lock:
+                            self._last_error = "failed to encode camera frame as JPEG"
+                        time.sleep(interval_s)
+                        continue
+                    payload = encoded.tobytes()
+                    if len(payload) > MAX_JPEG_BYTES:
+                        with self._lock:
+                            self._last_error = f"encoded JPEG exceeds {MAX_JPEG_BYTES} bytes"
+                        payload = b""
 
-                payload = encoded.tobytes()
+                _make_readonly(frame_bgr)
+                if depth_map_m is not None:
+                    _make_readonly(depth_map_m)
+
                 now = time.monotonic()
                 with self._lock:
                     self._frames_received += 1
@@ -217,13 +236,20 @@ class LocalCameraFrameSource:
                         sequence=self._frames_received,
                         timestamp_us=int(time.time() * 1_000_000),
                         received_monotonic=now,
+                        frame_bgr=frame_bgr,
+                        depth_map_m=depth_map_m,
                     )
                     self._latest = camera_frame
-                    self._last_error = None
+                    if payload or self._publisher is None:
+                        self._last_error = None
+                self.frame_ready.set()
 
-                if self._publisher is not None:
+                if self._publisher is not None and payload:
                     self._publisher.send(payload)
-                time.sleep(interval_s)
+                elapsed_s = time.monotonic() - loop_start
+                remaining_s = interval_s - elapsed_s
+                if remaining_s > 0.0:
+                    time.sleep(remaining_s)
         except Exception as exc:
             with self._lock:
                 self._last_error = str(exc)
@@ -297,18 +323,31 @@ class LocalCameraFrameSource:
     def _read_frame(self, cv2):
         if self.config.backend == "openni":
             if self._oni_color_stream is None:
-                return False, None
+                return False, None, None
             try:
                 color_frame = self._oni_color_stream.read_frame()
                 rgb_buf = np.frombuffer(color_frame.get_buffer_as_uint8(), dtype=np.uint8)
                 frame = rgb_buf.reshape(self.config.height, self.config.width, 3)
                 bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                return True, bgr
+                depth_map_m = self._read_openni_depth()
+                return True, bgr, depth_map_m
             except Exception:
-                return False, None
+                return False, None, None
         if self._capture is None:
-            return False, None
-        return self._capture.read()
+            return False, None, None
+        ok, bgr = self._capture.read()
+        return ok, bgr, None
+
+    def _read_openni_depth(self) -> np.ndarray | None:
+        if self._oni_depth_stream is None:
+            return None
+        try:
+            depth_frame = self._oni_depth_stream.read_frame()
+            depth_buf = np.frombuffer(depth_frame.get_buffer_as_uint16(), dtype=np.uint16)
+            depth_mm = depth_buf.reshape(self.config.height, self.config.width)
+            return depth_mm.astype(np.float32) / 1000.0
+        except Exception:
+            return None
 
     def _close_camera(self) -> None:
         if self._oni_color_stream is not None:
@@ -333,6 +372,11 @@ class LocalCameraFrameSource:
 
 def _looks_like_jpeg(payload: bytes) -> bool:
     return len(payload) > 4 and payload.startswith(b"\xff\xd8") and payload.endswith(b"\xff\xd9")
+
+
+def _make_readonly(array: np.ndarray) -> np.ndarray:
+    array.setflags(write=False)
+    return array
 
 
 def _path_exists(path: str) -> bool:

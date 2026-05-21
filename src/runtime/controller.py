@@ -40,7 +40,7 @@ class RuntimeConfig:
     pi_host: str = "25.12.4.101"
     runtime_backend: str = "engine"
     perception_enabled: bool = True
-    perception_interval_ms: int = 100
+    perception_interval_ms: int = 5
     result_source_id: str = "adaptive-runtime"
     sensor_ingest_port: int = 5555
     result_publish_port: int = 5556
@@ -280,8 +280,9 @@ class JetsonRuntimeController:
 
         from src.perception.pipeline import PerceptionPipeline
 
+        pipeline = PerceptionPipeline()
         self._perception_loop = RuntimePerceptionLoop(
-            pipeline=PerceptionPipeline(),
+            pipeline=pipeline,
             sensor_store=self.sensor_store,
             frame_source=self._frame_source,
             result_publisher=self._result_publisher,
@@ -290,12 +291,16 @@ class JetsonRuntimeController:
                 interval_ms=self.config.perception_interval_ms,
             ),
         )
+        pipeline.warmup()
         self._perception_loop.start()
 
     def _stop_perception_loop(self) -> None:
         if self._perception_loop is None:
             return
         self._perception_loop.stop()
+        close = getattr(self._perception_loop.pipeline, "close", None)
+        if close is not None:
+            close()
         self._perception_loop = None
 
     def _start_heartbeat(self) -> None:

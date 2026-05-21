@@ -19,6 +19,8 @@ from src.transport.results import (
 
 
 class FrameSource(Protocol):
+    frame_ready: threading.Event
+
     def latest(self) -> CameraFrame | None:
         ...
 
@@ -46,7 +48,7 @@ class ResultPublisher(Protocol):
 @dataclass(frozen=True, slots=True)
 class PerceptionLoopConfig:
     source_id: str = "adaptive-runtime"
-    interval_ms: int = 100
+    interval_ms: int = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +96,7 @@ class RuntimePerceptionLoop:
 
     def stop(self, timeout_s: float = 1.0) -> None:
         self._stop_event.set()
+        self.frame_source.frame_ready.set()
         if self._thread:
             self._thread.join(timeout=timeout_s)
 
@@ -112,7 +115,10 @@ class RuntimePerceptionLoop:
 
     def process_once(self, frame: CameraFrame) -> PerceptionResultMessage:
         decode_start = perf_counter()
-        frame_bgr = decode_jpeg_frame(frame.payload)
+        if frame.frame_bgr is not None:
+            frame_bgr = frame.frame_bgr
+        else:
+            frame_bgr = decode_jpeg_frame(frame.payload)
         camera_ms = (perf_counter() - decode_start) * 1000.0
         delta_time_s = self._delta_time_s(frame)
 
@@ -120,6 +126,7 @@ class RuntimePerceptionLoop:
         imu = self.sensor_store.latest_imu()
         entities, timings = self.pipeline.process(
             frame_bgr,
+            depth_map_m=frame.depth_map_m,
             lidar_scan=lidar.scan_points if lidar is not None else None,
             accel_xyz_mps2=imu.accel_xyz_mps2 if imu is not None else None,
             quat_xyzw=imu.quat_xyzw if imu is not None else None,
@@ -144,11 +151,13 @@ class RuntimePerceptionLoop:
         return message
 
     def _run(self) -> None:
-        interval_s = max(self.config.interval_ms, 10) / 1000.0
         while not self._stop_event.is_set():
+            self.frame_source.frame_ready.wait()
+            self.frame_source.frame_ready.clear()
+            if self._stop_event.is_set():
+                break
             frame = self.frame_source.latest()
             if frame is None or frame.sequence == self._last_frame_sequence:
-                time.sleep(interval_s)
                 continue
             try:
                 self.process_once(frame)
@@ -156,7 +165,6 @@ class RuntimePerceptionLoop:
                 with self._lock:
                     self._publish_errors += 1
                     self._last_error = str(exc)
-                time.sleep(interval_s)
 
     def _delta_time_s(self, frame: CameraFrame) -> float:
         if self._last_frame_timestamp_us is None:

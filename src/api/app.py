@@ -101,7 +101,7 @@ def _load_runtime_config() -> RuntimeConfig:
         pi_host=os.environ.get("CTX_PI_HOST", "25.12.4.101"),
         runtime_backend=os.environ.get("CTX_RUNTIME_BACKEND", "engine"),
         perception_enabled=_env_bool("CTX_PERCEPTION_ENABLED", True),
-        perception_interval_ms=int(os.environ.get("CTX_PERCEPTION_INTERVAL_MS", "100")),
+        perception_interval_ms=int(os.environ.get("CTX_PERCEPTION_INTERVAL_MS", "5")),
         result_source_id=os.environ.get("CTX_RESULT_SOURCE_ID", "adaptive-runtime"),
         sensor_ingest_port=int(os.environ.get("CTX_SENSOR_INGEST_PORT", "5555")),
         result_publish_port=int(os.environ.get("CTX_RESULT_PUBLISH_PORT", "5556")),

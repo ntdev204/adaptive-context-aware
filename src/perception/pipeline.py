@@ -52,11 +52,16 @@ from .sensor_fusion import FusedEntity, SensorFusion
 from .tracker import MultiObjectTracker
 
 _FLAT_DEPTH_Z_M = 5.0  # assumed depth when no real depth map is available
+_CACHED_FLAT_DEPTH: np.ndarray | None = None
 
 
 def _make_flat_depth() -> np.ndarray:
-    """Return a constant-depth plane (all pixels = _FLAT_DEPTH_Z_M)."""
-    return np.full(DEPTH_SHAPE_HW, _FLAT_DEPTH_Z_M, dtype=np.float32)
+    """Return a cached constant-depth plane (all pixels = _FLAT_DEPTH_Z_M)."""
+    global _CACHED_FLAT_DEPTH
+    if _CACHED_FLAT_DEPTH is None:
+        _CACHED_FLAT_DEPTH = np.full(DEPTH_SHAPE_HW, _FLAT_DEPTH_Z_M, dtype=np.float32)
+        _CACHED_FLAT_DEPTH.flags.writeable = False
+    return _CACHED_FLAT_DEPTH
 
 
 @dataclass(slots=True)
@@ -86,6 +91,12 @@ class PerceptionPipeline:
 
     def __post_init__(self) -> None:
         self.tracker = self._load_tracker(self.tracker_config_path)
+
+    def warmup(self) -> None:
+        self.detector.warmup()
+
+    def close(self) -> None:
+        self.detector.close()
 
     # ------------------------------------------------------------------
     # Tracker factory
