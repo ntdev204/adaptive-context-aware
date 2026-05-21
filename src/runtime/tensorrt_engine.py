@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -37,6 +38,11 @@ class TensorRTEngineRunner:
     def run(self, *inputs: np.ndarray) -> np.ndarray:
         return self.runner.run(*inputs)
 
+    def close(self) -> None:
+        close = getattr(self.runner, "close", None)
+        if close is not None:
+            close()
+
 
 class _TorchScriptTensorRTRunner:
     def __init__(self, engine_path: Path) -> None:
@@ -73,10 +79,9 @@ class _Allocation:
 class _RawTensorRTRunner:
     def __init__(self, engine_path: Path, input_names: tuple[str, ...]) -> None:
         import tensorrt as trt
-        from cuda import cudart
 
         self.trt = trt
-        self.cudart = cudart
+        self.cudart = _load_cudart_module()
         self.logger = trt.Logger(trt.Logger.WARNING)
         runtime = trt.Runtime(self.logger)
         self.engine = runtime.deserialize_cuda_engine(engine_path.read_bytes())
@@ -95,6 +100,19 @@ class _RawTensorRTRunner:
         self.output_names = tuple(name for name in self.tensor_names if name not in discovered_inputs)
         if not self.output_names:
             raise RuntimeError("engine has no output tensors")
+        self._allocations: dict[str, _Allocation] = {}
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
+    def close(self) -> None:
+        allocations = getattr(self, "_allocations", {})
+        for allocation in allocations.values():
+            self._cuda_check(self.cudart.cudaFree(allocation.ptr), "cudaFree")
+        allocations.clear()
 
     def run(self, *inputs: np.ndarray) -> np.ndarray:
         if len(inputs) != len(self.input_names):
@@ -107,24 +125,22 @@ class _RawTensorRTRunner:
         for name, values in host_inputs.items():
             self._set_input_shape(name, values.shape)
 
-        allocations: dict[str, _Allocation] = {}
-        try:
-            for name, values in host_inputs.items():
-                allocations[name] = self._allocate(values)
-                self._copy_host_to_device(allocations[name])
+        for name, values in host_inputs.items():
+            allocation = self._get_or_alloc(name, values)
+            np.copyto(allocation.host, values)
+            self._copy_host_to_device(allocation)
 
-            for name in self.output_names:
-                output = np.empty(self._shape(name), dtype=self._dtype(name))
-                allocations[name] = self._allocate(output)
+        for name in self.output_names:
+            shape = self._shape(name)
+            dtype = self._dtype(name)
+            output_host = np.empty(shape, dtype=dtype)
+            self._get_or_alloc(name, output_host)
 
-            self._execute(allocations)
-            first_output = allocations[self.output_names[0]]
-            self._copy_device_to_host(first_output)
-            self._device_synchronize()
-            return first_output.host
-        finally:
-            for allocation in allocations.values():
-                self._cuda_check(self.cudart.cudaFree(allocation.ptr), "cudaFree")
+        self._execute(self._allocations)
+        first_output = self._allocations[self.output_names[0]]
+        self._copy_device_to_host(first_output)
+        self._device_synchronize()
+        return first_output.host
 
     def _tensor_names(self) -> tuple[str, ...]:
         if hasattr(self.engine, "num_io_tensors"):
@@ -164,6 +180,16 @@ class _RawTensorRTRunner:
         else:
             trt_dtype = self.engine.get_binding_dtype(self.engine.get_binding_index(name))
         return np.dtype(self.trt.nptype(trt_dtype))
+
+    def _get_or_alloc(self, name: str, host: np.ndarray) -> _Allocation:
+        existing = self._allocations.get(name)
+        if existing is not None and existing.host.shape == host.shape and existing.host.dtype == host.dtype:
+            return existing
+        if existing is not None:
+            self._cuda_check(self.cudart.cudaFree(existing.ptr), "cudaFree")
+        allocation = self._allocate(np.empty_like(host))
+        self._allocations[name] = allocation
+        return allocation
 
     def _allocate(self, host: np.ndarray) -> _Allocation:
         result = self.cudart.cudaMalloc(host.nbytes)
@@ -216,3 +242,33 @@ class _RawTensorRTRunner:
         error = result[0] if isinstance(result, tuple) else result
         if int(getattr(error, "value", error)) != 0:
             raise RuntimeError(f"{operation} failed with CUDA error {error}")
+
+
+def _load_cudart_module() -> object:
+    errors: list[str] = []
+    candidates = (
+        ("cuda.bindings.runtime", None),
+        ("cuda.cudart", None),
+        ("cuda", "cudart"),
+        ("cuda.cuda", None),
+    )
+    for module_name, attribute_name in candidates:
+        try:
+            module = importlib.import_module(module_name)
+            candidate = getattr(module, attribute_name) if attribute_name is not None else module
+        except Exception as exc:
+            errors.append(f"{module_name}: {exc}")
+            continue
+        if _looks_like_cudart(candidate):
+            return candidate
+        errors.append(f"{module_name}: missing cuda runtime symbols")
+    raise RuntimeError(
+        "could not import CUDA runtime bindings; tried "
+        + ", ".join(module for module, _ in candidates)
+        + f" ({'; '.join(errors)})"
+    )
+
+
+def _looks_like_cudart(candidate: object) -> bool:
+    required = ("cudaMalloc", "cudaMemcpy", "cudaDeviceSynchronize", "cudaFree", "cudaMemcpyKind")
+    return all(hasattr(candidate, name) for name in required)

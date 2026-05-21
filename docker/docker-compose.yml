@@ -1,59 +1,142 @@
+name: adaptive-context-aware
+
+x-adaptive-env: &adaptive-env
+  CTX_BIND_HOST: ${CTX_BIND_HOST:-0.0.0.0}
+  CTX_CAMERA_BACKEND: ${CTX_CAMERA_BACKEND:-openni}
+  CTX_CAMERA_SOURCE: ${CTX_CAMERA_SOURCE:-device}
+  CTX_ASTRAS_DEPTH_DEVICE: ${CTX_ASTRAS_DEPTH_DEVICE:-/dev/video1}
+  CTX_ASTRAS_RGB_DEVICE: ${CTX_ASTRAS_RGB_DEVICE:-/dev/video0}
+  CTX_RUNTIME_BACKEND: ${CTX_RUNTIME_BACKEND:-engine}
+  CTX_AUTOSTART: ${CTX_AUTOSTART:-true}
+  CTX_JETSON_HOST: ${CTX_JETSON_HOST:-25.12.4.100}
+  CTX_PI_HOST: ${CTX_PI_HOST:-25.12.4.101}
+  CTX_SCADA_CAMERA_HOST: ${CTX_SCADA_CAMERA_HOST:-25.12.4.101}
+  CTX_SCADA_CAMERA_PORT: ${CTX_SCADA_CAMERA_PORT:-5557}
+  CTX_CAMERA_PUBLISH_PORT: ${CTX_CAMERA_PUBLISH_PORT:-5557}
+  CTX_CAMERA_PUBLISH_ENABLED: ${CTX_CAMERA_PUBLISH_ENABLED:-true}
+  CTX_CAMERA_FRAME_TIMEOUT_MS: ${CTX_CAMERA_FRAME_TIMEOUT_MS:-2000}
+  CTX_SENSOR_INGEST_PORT: ${CTX_SENSOR_INGEST_PORT:-5555}
+  CTX_RESULT_PUBLISH_PORT: ${CTX_RESULT_PUBLISH_PORT:-5556}
+  CTX_HEARTBEAT_PORT: ${CTX_HEARTBEAT_PORT:-9093}
+  CTX_HEARTBEAT_INTERVAL_MS: ${CTX_HEARTBEAT_INTERVAL_MS:-500}
+  CTX_PERCEPTION_ENABLED: ${CTX_PERCEPTION_ENABLED:-true}
+  CTX_PERCEPTION_INTERVAL_MS: ${CTX_PERCEPTION_INTERVAL_MS:-100}
+  CTX_PT_MODEL_PATH: ${CTX_PT_MODEL_PATH:-/app/models/fine_tuning/best.pt}
+  CTX_ENGINE_MODEL_PATH: ${CTX_ENGINE_MODEL_PATH:-/app/models/engines/best.engine}
+  CTX_TRACKER_CONFIG_PATH: ${CTX_TRACKER_CONFIG_PATH:-/app/models/fine_tuning/botsort_tuned.json}
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${DOCKER_LOG_MAX_SIZE:-10m}
+    max-file: ${DOCKER_LOG_MAX_FILE:-3}
+
 services:
-  control-api:
+  jetson-prod:
+    image: context-aware:jetson-prod
     build:
       context: ..
-      dockerfile: docker/Dockerfile.prod
+      dockerfile: docker/Dockerfile.jetson
+      target: jetson-prod
     environment:
-      CTX_CAMERA_BACKEND: openni
-      CTX_ASTRAS_DEPTH_DEVICE: ""
-      CTX_ASTRAS_RGB_DEVICE: ""
-      CTX_RUNTIME_ROLE: control-api
-      CTX_JETSON_HOST: 25.12.4.100
-      CTX_PI_HOST: 25.12.4.101
-      CTX_SENSOR_INGEST_PORT: 5555
-      CTX_RESULT_PUBLISH_PORT: 5556
-      CTX_HEARTBEAT_PORT: 9093
-      CTX_HEARTBEAT_INTERVAL_MS: 500
+      <<: *adaptive-env
+      CTX_RUNTIME_ROLE: jetson-prod
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-all}
+      CUDA_MODULE_LOADING: ${CUDA_MODULE_LOADING:-LAZY}
+      PYTHONPATH: /app
     volumes:
-      - ctx-aware-engines:/app/models/engines
-    devices:
-      - /dev/bus/usb:/dev/bus/usb
+      - ../models:/app/models
+      - ../models/torch_cache:/data/models/torch
+      - ../logs:/app/logs
+      - ../data:/app/data
+      - ../config:/app/config:ro
+      - /run/udev:/run/udev:ro
     network_mode: host
     privileged: true
-    command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8080"]
-
-  dev-control-api:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.dev
-    environment:
-      CTX_CAMERA_BACKEND: openni
-      CTX_ASTRAS_DEPTH_DEVICE: ""
-      CTX_ASTRAS_RGB_DEVICE: ""
-      CTX_RUNTIME_ROLE: dev-control-api
-      CTX_JETSON_HOST: 127.0.0.1
-      CTX_PI_HOST: 127.0.0.2
-      CTX_SENSOR_INGEST_PORT: 5555
-      CTX_RESULT_PUBLISH_PORT: 5556
-      CTX_HEARTBEAT_PORT: 9093
-      CTX_HEARTBEAT_INTERVAL_MS: 500
-    volumes:
-      - ../src:/app/src
-      - ../config:/app/config
-      - ../scripts:/app/scripts
-    ports:
-      - "8080:8080"
-      - "5555:5555"
-      - "5556:5556"
+    runtime: nvidia
     devices:
       - /dev/bus/usb:/dev/bus/usb
-    privileged: true
-    command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8080"]
+      - /dev:/dev
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5).read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    mem_limit: 3g
+    memswap_limit: 4g
 
-  monitor:
+  mlflow:
+    image: python:3.10-slim
+    profiles: ["mlops"]
+    working_dir: /srv/mlflow
+    environment:
+      MLFLOW_BACKEND_URI: ${MLFLOW_BACKEND_URI:-sqlite:////srv/mlflow/state/mlflow.db}
+      MLFLOW_ARTIFACT_ROOT: ${MLFLOW_ARTIFACT_ROOT:-/srv/mlflow/artifacts}
+      MLFLOW_HOST: ${MLFLOW_HOST:-0.0.0.0}
+      MLFLOW_PORT: ${MLFLOW_PORT:-5000}
+    volumes:
+      - ../logs/mlflow:/srv/mlflow/state
+      - ../logs/mlruns:/srv/mlflow/artifacts
+    ports:
+      - "${MLFLOW_PORT:-5000}:5000"
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/', timeout=5).read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    command:
+      - sh
+      - -lc
+      - >
+        pip install --no-cache-dir mlflow &&
+        mlflow server
+        --backend-store-uri "$${MLFLOW_BACKEND_URI}"
+        --default-artifact-root "$${MLFLOW_ARTIFACT_ROOT}"
+        --host "$${MLFLOW_HOST}"
+        --port "$${MLFLOW_PORT}"
+
+  jetson-dev:
+    profiles: ["jetson-dev"]
+    image: context-aware:jetson-dev
     build:
       context: ..
-      dockerfile: docker/Dockerfile.dev
+      dockerfile: docker/Dockerfile.jetson
+      target: jetson-dev
+    environment:
+      <<: *adaptive-env
+      CTX_RUNTIME_ROLE: jetson-dev
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-all}
+      CUDA_MODULE_LOADING: ${CUDA_MODULE_LOADING:-LAZY}
+      PYTHONPATH: /app
+    volumes:
+      - ..:/app
+      - /run/udev:/run/udev:ro
+    network_mode: host
+    privileged: true
+    runtime: nvidia
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+      - /dev:/dev
+    logging: *default-logging
+    command: /bin/bash
+    stdin_open: true
+    tty: true
+    restart: "no"
+
+  monitor:
+    profiles: ["ci"]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.jetson
+      target: jetson-dev
     environment:
       CTX_RUNTIME_ROLE: monitor
     volumes:
@@ -61,23 +144,30 @@ services:
       - ../config:/app/config
       - ../scripts:/app/scripts
       - ../tests:/app/tests
+    logging: *default-logging
     command: ["python", "scripts/benchmark.py", "--device", "ci", "--compare-baseline"]
 
   watchdog:
+    profiles: ["debug"]
+    image: context-aware:jetson-dev
     build:
       context: ..
-      dockerfile: docker/Dockerfile.dev
+      dockerfile: docker/Dockerfile.jetson
+      target: jetson-dev
     environment:
+      <<: *adaptive-env
       CTX_RUNTIME_ROLE: watchdog
     volumes:
       - ../src:/app/src
       - ../config:/app/config
       - ../scripts:/app/scripts
+      - ../logs:/app/logs
+    logging: *default-logging
     command: ["python", "-m", "src.main"]
 
   synthetic-h5:
     profiles: ["dataset"]
-    image: ctx-aware:dev
+    image: context-aware:jetson-dev
     environment:
       CTX_RUNTIME_ROLE: synthetic-h5
       SYNTHETIC_RAW_DIR: ${SYNTHETIC_RAW_DIR:-data/raw}
@@ -93,6 +183,8 @@ services:
       - ../pipelines:/app/pipelines
       - ../data:/app/data
       - ../models:/app/models
+      - ../logs:/app/logs
+    logging: *default-logging
     command:
       - sh
       - -lc
@@ -106,6 +198,3 @@ services:
         --source-kind "$${SYNTHETIC_SOURCE_KIND}"
         --image-detection-source "$${SYNTHETIC_IMAGE_DETECTION_SOURCE}"
         $${SYNTHETIC_EXTRA_ARGS}
-
-volumes:
-  ctx-aware-engines:

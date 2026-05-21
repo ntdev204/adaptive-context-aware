@@ -33,6 +33,7 @@ Example – run on live camera::
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Generator
@@ -51,11 +52,16 @@ from .sensor_fusion import FusedEntity, SensorFusion
 from .tracker import MultiObjectTracker
 
 _FLAT_DEPTH_Z_M = 5.0  # assumed depth when no real depth map is available
+_CACHED_FLAT_DEPTH: np.ndarray | None = None
 
 
 def _make_flat_depth() -> np.ndarray:
-    """Return a constant-depth plane (all pixels = _FLAT_DEPTH_Z_M)."""
-    return np.full(DEPTH_SHAPE_HW, _FLAT_DEPTH_Z_M, dtype=np.float32)
+    """Return a cached constant-depth plane (all pixels = _FLAT_DEPTH_Z_M)."""
+    global _CACHED_FLAT_DEPTH
+    if _CACHED_FLAT_DEPTH is None:
+        _CACHED_FLAT_DEPTH = np.full(DEPTH_SHAPE_HW, _FLAT_DEPTH_Z_M, dtype=np.float32)
+        _CACHED_FLAT_DEPTH.flags.writeable = False
+    return _CACHED_FLAT_DEPTH
 
 
 @dataclass(slots=True)
@@ -68,7 +74,9 @@ class PerceptionPipelineReport:
 
 @dataclass(slots=True)
 class PerceptionPipeline:
-    detector: PersonDetector = field(default_factory=lambda: PersonDetector(DetectorConfig(backend="engine")))
+    detector: PersonDetector = field(
+        default_factory=lambda: PersonDetector(DetectorConfig(backend=os.environ.get("CTX_RUNTIME_BACKEND", "engine")))
+    )
     depth_processor: DepthProcessor = field(
         default_factory=lambda: DepthProcessor(CameraIntrinsics(fx=400.0, fy=400.0, cx=320.0, cy=240.0))
     )
@@ -77,10 +85,18 @@ class PerceptionPipeline:
     imu_fusion: IMUFusion = field(default_factory=IMUFusion)
     sensor_fusion: SensorFusion = field(default_factory=SensorFusion)
     feature_extractor: EntityFeatureExtractor = field(default_factory=EntityFeatureExtractor)
-    tracker_config_path: str = "models/fine_tuning/botsort_tuned.json"
+    tracker_config_path: str = field(
+        default_factory=lambda: os.environ.get("CTX_TRACKER_CONFIG_PATH", "models/fine_tuning/botsort_tuned.json")
+    )
 
     def __post_init__(self) -> None:
         self.tracker = self._load_tracker(self.tracker_config_path)
+
+    def warmup(self) -> None:
+        self.detector.warmup()
+
+    def close(self) -> None:
+        self.detector.close()
 
     # ------------------------------------------------------------------
     # Tracker factory

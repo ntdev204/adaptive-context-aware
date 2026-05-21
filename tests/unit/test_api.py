@@ -9,7 +9,8 @@ from src.runtime.controller import JetsonRuntimeController, RuntimeConfig
 def _client() -> TestClient:
     controller = JetsonRuntimeController(
         RuntimeConfig(
-            jetson_host="127.0.0.1",
+            bind_host="0.0.0.0",
+            jetson_host="25.12.4.100",
             pi_host="127.0.0.2",
             sensor_ingest_port=0,
             result_publish_port=0,
@@ -31,9 +32,10 @@ def test_control_plane_exposes_config_and_metrics() -> None:
     client = _client()
     config = client.get("/config")
     assert config.status_code == 200
-    assert config.json()["jetson_host"] == "127.0.0.1"
-    assert config.json()["sensor_ingest_endpoint"] == "tcp://127.0.0.1:0"
-    assert config.json()["result_publish_endpoint"] == "tcp://127.0.0.1:0"
+    assert config.json()["bind_host"] == "0.0.0.0"
+    assert config.json()["jetson_host"] == "25.12.4.100"
+    assert config.json()["sensor_ingest_endpoint"] == "tcp://25.12.4.100:0"
+    assert config.json()["result_publish_endpoint"] == "tcp://25.12.4.100:0"
     assert config.json()["heartbeat_endpoint"] == "tcp://127.0.0.2:9093"
     assert config.json()["camera_rgb_device"] == "/tmp/astras-rgb"
 
@@ -43,7 +45,8 @@ def test_control_plane_exposes_config_and_metrics() -> None:
     assert payload["state"] == "stopped"
     assert payload["engine_available"] is False
     assert payload["camera_available"] is False
-    assert payload["result_publish_endpoint"] == "tcp://127.0.0.1:0"
+    assert payload["sensor_ingest_endpoint"] == "tcp://25.12.4.100:0"
+    assert payload["result_publish_endpoint"] == "tcp://25.12.4.100:0"
     assert payload["heartbeat_endpoint"] == "tcp://127.0.0.2:9093"
     assert payload["messages_received"] == 0
 
