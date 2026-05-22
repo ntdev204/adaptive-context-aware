@@ -21,8 +21,7 @@ from src.transport.results import (
 class FrameSource(Protocol):
     frame_ready: threading.Event
 
-    def latest(self) -> CameraFrame | None:
-        ...
+    def latest(self) -> CameraFrame | None: ...
 
 
 class PerceptionPipeline(Protocol):
@@ -36,13 +35,11 @@ class PerceptionPipeline(Protocol):
         timestamp_us: int = 0,
         frame_id: int | None = None,
         delta_time_s: float = 0.1,
-    ) -> tuple[list[FusedEntity], dict[str, float]]:
-        ...
+    ) -> tuple[list[FusedEntity], dict[str, float]]: ...
 
 
 class ResultPublisher(Protocol):
-    def publish(self, message: PerceptionResultMessage) -> None:
-        ...
+    def publish(self, message: PerceptionResultMessage) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,8 +119,8 @@ class RuntimePerceptionLoop:
         camera_ms = (perf_counter() - decode_start) * 1000.0
         delta_time_s = self._delta_time_s(frame)
 
-        lidar = self.sensor_store.latest_lidar()
-        imu = self.sensor_store.latest_imu()
+        lidar = self.sensor_store.lidar_nearest(frame.timestamp_us) or self.sensor_store.latest_lidar()
+        imu = self.sensor_store.imu_nearest(frame.timestamp_us) or self.sensor_store.latest_imu()
         entities, timings = self.pipeline.process(
             frame_bgr,
             depth_map_m=frame.depth_map_m,
@@ -213,10 +210,16 @@ def build_result_message(
 def _to_tracked_entity(entity: FusedEntity) -> TrackedEntityMessage:
     return TrackedEntityMessage(
         track_id=int(entity.track_id),
+        class_id=float(entity.class_id),
         bbox_xywh=entity.bbox_xywh.astype(np.float32, copy=True),
+        contour_xy=entity.contour_xy.astype(np.float32, copy=True),
+        contour_points_xyz_m=entity.contour_points_xyz_m.astype(np.float32, copy=True),
         position_xyz_m=entity.position_3d.astype(np.float32, copy=True),
         velocity_xyz_mps=entity.velocity_3d.astype(np.float32, copy=True),
         heading_rad=float(entity.heading_rad),
         confidence=float(entity.confidence),
         nearest_obstacle_distance_m=entity.nearest_obstacle_distance_m,
+        distance_to_robot_m=entity.distance_to_robot_m,
+        distance_source=entity.distance_source,
+        sync_confidence=float(entity.sync_confidence),
     )

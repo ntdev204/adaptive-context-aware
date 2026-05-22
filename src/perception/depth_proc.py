@@ -25,6 +25,8 @@ class DepthBoundingBox3D:
     height_m: float
     confidence: float
     class_id: float
+    contour_xy: np.ndarray
+    contour_points_xyz_m: np.ndarray
 
 
 class DepthProcessor:
@@ -50,6 +52,8 @@ class DepthProcessor:
             y_m = (center_y - self.intrinsics.cy) * depth_value / self.intrinsics.fy
             width_m = float(w) * depth_value / self.intrinsics.fx
             height_m = float(h) * depth_value / self.intrinsics.fy
+            contour_xy = self._roi_contour(depth_map_m, x, y, w, h)
+            contour_points_xyz_m = self._contour_points_to_3d(contour_xy, depth_map_m)
             results.append(
                 DepthBoundingBox3D(
                     x_m=x_m,
@@ -59,6 +63,8 @@ class DepthProcessor:
                     height_m=height_m,
                     confidence=float(conf),
                     class_id=float(cls),
+                    contour_xy=contour_xy,
+                    contour_points_xyz_m=contour_points_xyz_m,
                 )
             )
         return results
@@ -93,3 +99,41 @@ class DepthProcessor:
         if valid.size == 0:
             return None
         return float(np.median(valid))
+
+    def _roi_contour(self, depth_map_m: np.ndarray, x: float, y: float, w: float, h: float) -> np.ndarray:
+        x0 = max(0, int(round(x)))
+        y0 = max(0, int(round(y)))
+        x1 = min(depth_map_m.shape[1], int(round(x + w)))
+        y1 = min(depth_map_m.shape[0], int(round(y + h)))
+        if x0 >= x1 or y0 >= y1:
+            return np.zeros((0, 2), dtype=np.float32)
+
+        contour = np.array(
+            [
+                [x0, y0],
+                [x1, y0],
+                [x1, y1],
+                [x0, y1],
+            ],
+            dtype=np.float32,
+        )
+        return contour
+
+    def _contour_points_to_3d(self, contour_xy: np.ndarray, depth_map_m: np.ndarray) -> np.ndarray:
+        if contour_xy.size == 0:
+            return np.zeros((0, 3), dtype=np.float32)
+
+        points_xyz: list[list[float]] = []
+        for pixel_x, pixel_y in contour_xy:
+            x_px = int(np.clip(round(float(pixel_x)), 0, depth_map_m.shape[1] - 1))
+            y_px = int(np.clip(round(float(pixel_y)), 0, depth_map_m.shape[0] - 1))
+            depth_value = float(depth_map_m[y_px, x_px])
+            if not np.isfinite(depth_value) or depth_value <= 0:
+                continue
+            x_m = (float(pixel_x) - self.intrinsics.cx) * depth_value / self.intrinsics.fx
+            y_m = (float(pixel_y) - self.intrinsics.cy) * depth_value / self.intrinsics.fy
+            points_xyz.append([x_m, y_m, depth_value])
+
+        if not points_xyz:
+            return np.zeros((0, 3), dtype=np.float32)
+        return np.asarray(points_xyz, dtype=np.float32)

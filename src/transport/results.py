@@ -13,12 +13,18 @@ from ._proto_helpers import add_proto_field
 @dataclass(frozen=True, slots=True)
 class TrackedEntityMessage:
     track_id: int
+    class_id: float
     bbox_xywh: np.ndarray
+    contour_xy: np.ndarray
+    contour_points_xyz_m: np.ndarray
     position_xyz_m: np.ndarray
     velocity_xyz_mps: np.ndarray
     heading_rad: float
     confidence: float
     nearest_obstacle_distance_m: float | None = None
+    distance_to_robot_m: float | None = None
+    distance_source: str | None = None
+    sync_confidence: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,14 +83,26 @@ def _encode_entity(proto: object, entity: TrackedEntityMessage) -> None:
     validate_ndarray(entity.bbox_xywh, expected_shape=(4,), name="bbox_xywh")
     validate_ndarray(entity.position_xyz_m, expected_shape=(3,), name="position_xyz_m")
     validate_ndarray(entity.velocity_xyz_mps, expected_shape=(3,), name="velocity_xyz_mps")
+    if entity.contour_xy.ndim != 2 or entity.contour_xy.shape[1] != 2:
+        raise ValueError("expected contour_xy with shape [N, 2]")
+    if entity.contour_points_xyz_m.ndim != 2 or entity.contour_points_xyz_m.shape[1] != 3:
+        raise ValueError("expected contour_points_xyz_m with shape [N, 3]")
     proto.track_id = entity.track_id
+    proto.class_id = entity.class_id
     proto.bbox_xywh.extend(entity.bbox_xywh.astype(float).tolist())
+    proto.contour_xy.extend(entity.contour_xy.astype(float).reshape(-1).tolist())
+    proto.contour_points_xyz_m.extend(entity.contour_points_xyz_m.astype(float).reshape(-1).tolist())
     proto.position_xyz_m.extend(entity.position_xyz_m.astype(float).tolist())
     proto.velocity_xyz_mps.extend(entity.velocity_xyz_mps.astype(float).tolist())
     proto.heading_rad = entity.heading_rad
     proto.confidence = entity.confidence
+    proto.sync_confidence = entity.sync_confidence
     if entity.nearest_obstacle_distance_m is not None:
         proto.nearest_obstacle_distance_m = entity.nearest_obstacle_distance_m
+    if entity.distance_to_robot_m is not None:
+        proto.distance_to_robot_m = entity.distance_to_robot_m
+    if entity.distance_source is not None:
+        proto.distance_source = entity.distance_source
 
 
 def _encode_metrics(proto: object, metrics: RuntimeMetricsMessage) -> None:
@@ -101,9 +119,17 @@ def _encode_metrics(proto: object, metrics: RuntimeMetricsMessage) -> None:
 
 
 def _decode_entity(proto: object) -> TrackedEntityMessage:
+    contour_xy = np.asarray(proto.contour_xy, dtype=np.float32).reshape(-1, 2)
+    contour_points_xyz_m = np.asarray(proto.contour_points_xyz_m, dtype=np.float32).reshape(-1, 3)
+    distance_source = None
+    if hasattr(proto, "distance_source"):
+        distance_source = str(proto.distance_source) or None
     return TrackedEntityMessage(
         track_id=int(proto.track_id),
+        class_id=float(getattr(proto, "class_id", 0.0)),
         bbox_xywh=np.asarray(proto.bbox_xywh, dtype=np.float32),
+        contour_xy=contour_xy,
+        contour_points_xyz_m=contour_points_xyz_m,
         position_xyz_m=np.asarray(proto.position_xyz_m, dtype=np.float32),
         velocity_xyz_mps=np.asarray(proto.velocity_xyz_mps, dtype=np.float32),
         heading_rad=float(proto.heading_rad),
@@ -111,6 +137,9 @@ def _decode_entity(proto: object) -> TrackedEntityMessage:
         nearest_obstacle_distance_m=(
             float(proto.nearest_obstacle_distance_m) if proto.HasField("nearest_obstacle_distance_m") else None
         ),
+        distance_to_robot_m=(float(proto.distance_to_robot_m) if proto.HasField("distance_to_robot_m") else None),
+        distance_source=distance_source,
+        sync_confidence=float(getattr(proto, "sync_confidence", 0.0)),
     )
 
 
@@ -153,18 +182,30 @@ def _register_tracked_entity(file_desc: descriptor_pb2.FileDescriptorProto) -> N
     msg = file_desc.message_type.add()
     msg.name = "TrackedEntity"
     add_proto_field(msg, "track_id", 1, descriptor_pb2.FieldDescriptorProto.TYPE_UINT32)
-    add_proto_field(msg, "bbox_xywh", 2, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT, repeated=True)
-    add_proto_field(msg, "position_xyz_m", 3, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT, repeated=True)
-    add_proto_field(msg, "velocity_xyz_mps", 4, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT, repeated=True)
-    add_proto_field(msg, "heading_rad", 5, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT)
-    add_proto_field(msg, "confidence", 6, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT)
+    add_proto_field(msg, "class_id", 2, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT)
+    add_proto_field(msg, "bbox_xywh", 3, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT, repeated=True)
+    add_proto_field(msg, "contour_xy", 4, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT, repeated=True)
+    add_proto_field(msg, "contour_points_xyz_m", 5, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT, repeated=True)
+    add_proto_field(msg, "position_xyz_m", 6, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT, repeated=True)
+    add_proto_field(msg, "velocity_xyz_mps", 7, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT, repeated=True)
+    add_proto_field(msg, "heading_rad", 8, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT)
+    add_proto_field(msg, "confidence", 9, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT)
     add_proto_field(
         msg,
         "nearest_obstacle_distance_m",
-        7,
+        10,
         descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT,
         proto3_optional=True,
     )
+    add_proto_field(
+        msg,
+        "distance_to_robot_m",
+        11,
+        descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT,
+        proto3_optional=True,
+    )
+    add_proto_field(msg, "distance_source", 12, descriptor_pb2.FieldDescriptorProto.TYPE_STRING)
+    add_proto_field(msg, "sync_confidence", 13, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT)
 
 
 def _register_runtime_metrics(file_desc: descriptor_pb2.FileDescriptorProto) -> None:

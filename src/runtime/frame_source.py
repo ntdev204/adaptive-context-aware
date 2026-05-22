@@ -44,7 +44,8 @@ class LocalCameraFrameConfig:
     publish_host: str = "0.0.0.0"
     publish_port: int = 5557
     publish_enabled: bool = True
-    jpeg_quality: int = 80
+    publish_depth_preview: bool = False
+    jpeg_quality: int = 70
 
     @property
     def endpoint(self) -> str:
@@ -211,6 +212,7 @@ class LocalCameraFrameSource:
                     continue
 
                 payload = b""
+                depth_payload = b""
                 if self._publisher is not None:
                     ok, encoded = cv2.imencode(".jpg", frame_bgr, encode_params)
                     if not ok:
@@ -223,6 +225,14 @@ class LocalCameraFrameSource:
                         with self._lock:
                             self._last_error = f"encoded JPEG exceeds {MAX_JPEG_BYTES} bytes"
                         payload = b""
+
+                    if self.config.publish_depth_preview and depth_map_m is not None:
+                        depth_payload = _encode_depth_preview_jpeg(depth_map_m, cv2, encode_params)
+                        if depth_payload:
+                            depth_payload = b"DEPTH:" + depth_payload
+
+                    if payload:
+                        payload = b"RAW:" + payload
 
                 _make_readonly(frame_bgr)
                 if depth_map_m is not None:
@@ -246,6 +256,8 @@ class LocalCameraFrameSource:
 
                 if self._publisher is not None and payload:
                     self._publisher.send(payload)
+                if self._publisher is not None and depth_payload:
+                    self._publisher.send(depth_payload)
                 elapsed_s = time.monotonic() - loop_start
                 remaining_s = interval_s - elapsed_s
                 if remaining_s > 0.0:
@@ -372,6 +384,25 @@ class LocalCameraFrameSource:
 
 def _looks_like_jpeg(payload: bytes) -> bool:
     return len(payload) > 4 and payload.startswith(b"\xff\xd8") and payload.endswith(b"\xff\xd9")
+
+
+def _encode_depth_preview_jpeg(depth_map_m: np.ndarray, cv2, encode_params: list[int]) -> bytes:
+    valid = depth_map_m[np.isfinite(depth_map_m) & (depth_map_m > 0)]
+    if valid.size == 0:
+        return b""
+    min_depth = float(np.min(valid))
+    max_depth = float(np.max(valid))
+    scale = max(max_depth - min_depth, 1e-3)
+    normalized = np.clip((depth_map_m - min_depth) / scale, 0.0, 1.0)
+    depth_u8 = (normalized * 255.0).astype(np.uint8)
+    colored = cv2.applyColorMap(depth_u8, cv2.COLORMAP_TURBO)
+    ok, encoded = cv2.imencode(".jpg", colored, encode_params)
+    if not ok:
+        return b""
+    payload = encoded.tobytes()
+    if len(payload) > MAX_JPEG_BYTES:
+        return b""
+    return payload
 
 
 def _make_readonly(array: np.ndarray) -> np.ndarray:

@@ -51,7 +51,9 @@ def train_router_policy(config: RLTrainingConfig = RLTrainingConfig()) -> RLTrai
     train_dataset, validation_dataset = _split_dataset(features, labels, config.validation_fraction, config.seed)
     model = RLPolicyNet()
 
-    backend = "ppo" if config.backend == "ppo" or (config.backend == "auto" and _has_stable_baselines()) else "supervised"
+    backend = (
+        "ppo" if config.backend == "ppo" or (config.backend == "auto" and _has_stable_baselines()) else "supervised"
+    )
     if backend == "ppo":
         _warm_start_with_ppo(model, config.fixture_dir, seed=config.seed)
 

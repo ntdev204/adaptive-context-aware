@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from collections import deque
 from dataclasses import dataclass
 from time import monotonic
 
@@ -19,13 +20,15 @@ class SensorStoreSnapshot:
 
 
 class SensorStore:
-    def __init__(self) -> None:
+    def __init__(self, history_size: int = 32) -> None:
         self._lock = threading.Lock()
         self._lidar: LidarScanMessage | None = None
         self._imu: ImuSampleMessage | None = None
         self._pi_status: PiStatusMessage | None = None
         self._lidar_monotonic: float | None = None
         self._imu_monotonic: float | None = None
+        self._lidar_history: deque[LidarScanMessage] = deque(maxlen=history_size)
+        self._imu_history: deque[ImuSampleMessage] = deque(maxlen=history_size)
 
     def update(self, message: SensorMessage) -> None:
         now = monotonic()
@@ -33,9 +36,11 @@ class SensorStore:
             if isinstance(message, LidarScanMessage):
                 self._lidar = message
                 self._lidar_monotonic = now
+                self._lidar_history.append(message)
             elif isinstance(message, ImuSampleMessage):
                 self._imu = message
                 self._imu_monotonic = now
+                self._imu_history.append(message)
             elif isinstance(message, PiStatusMessage):
                 self._pi_status = message
 
@@ -46,6 +51,14 @@ class SensorStore:
     def latest_imu(self) -> ImuSampleMessage | None:
         with self._lock:
             return self._imu
+
+    def lidar_nearest(self, timestamp_us: int) -> LidarScanMessage | None:
+        with self._lock:
+            return _nearest_by_timestamp(self._lidar_history, timestamp_us)
+
+    def imu_nearest(self, timestamp_us: int) -> ImuSampleMessage | None:
+        with self._lock:
+            return _nearest_by_timestamp(self._imu_history, timestamp_us)
 
     def snapshot(self) -> SensorStoreSnapshot:
         with self._lock:
@@ -65,3 +78,9 @@ class SensorStore:
                 pi_cpu_temp_c=self._pi_status.cpu_temp_c if self._pi_status else None,
                 pi_cpu_load_pct=self._pi_status.cpu_load_pct if self._pi_status else None,
             )
+
+
+def _nearest_by_timestamp(messages, timestamp_us: int):
+    if not messages:
+        return None
+    return min(messages, key=lambda message: abs(message.timestamp_us - timestamp_us))

@@ -12,7 +12,7 @@ class _CausalTrim1d(nn.Module):
     def forward(self, values: torch.Tensor) -> torch.Tensor:
         if self.trim_size == 0:
             return values
-        return values[..., :-self.trim_size]
+        return values[..., : -self.trim_size]
 
 
 class _TemporalBlock(nn.Module):
