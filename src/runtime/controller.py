@@ -40,7 +40,7 @@ class RuntimeConfig:
     pi_host: str = "25.12.4.101"
     runtime_backend: str = "engine"
     perception_enabled: bool = True
-    perception_interval_ms: int = 33  # ~30 FPS (was 100ms = max 10 FPS)
+    perception_interval_ms: int = 100
     result_source_id: str = "adaptive-runtime"
     sensor_ingest_port: int = 5555
     result_publish_port: int = 5556
@@ -59,15 +59,6 @@ class RuntimeConfig:
     camera_height: int = FRAME_HEIGHT
     camera_fps: int = 30
     camera_publish_port: int = 5557
-    detect_every_n: int = 3
-    """Run full detector every N frames; tracker propagates bboxes on skip frames.
-    Default 3 reduces avg detector latency by ~3x (e.g. 85ms → ~29ms avg).
-    Set to 1 to detect every frame (maximum accuracy, highest latency).
-    """
-    detector_input_scale: float = 1.0
-    """Downscale factor for detector input frame (e.g. 0.5 = 320x240 from 640x480).
-    Set to 0.5 for additional ~2-4x inference speedup on GPU/TRT.
-    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,8 +121,8 @@ class JetsonRuntimeController:
         try:
             self._ingest.start()
             self._result_publisher.start()
-            self._start_perception_loop()
             self._start_frame_source()
+            self._start_perception_loop()
             self._start_heartbeat()
         except Exception as exc:
             self._stop_perception_loop()
@@ -269,7 +260,6 @@ class JetsonRuntimeController:
                     read_interval_ms=max(1, int(1000 / max(self.config.camera_fps, 1))),
                     publish_port=self.config.camera_publish_port,
                     publish_enabled=_env_bool("CTX_CAMERA_PUBLISH_ENABLED", True),
-                    publish_depth_preview=_env_bool("CTX_CAMERA_PUBLISH_DEPTH_PREVIEW", False),
                 )
             )
         return None
@@ -290,12 +280,8 @@ class JetsonRuntimeController:
 
         from src.perception.pipeline import PerceptionPipeline
 
-        pipeline = PerceptionPipeline(
-            detector=_make_detector(self.config),
-            detect_every_n=self.config.detect_every_n,
-        )
         self._perception_loop = RuntimePerceptionLoop(
-            pipeline=pipeline,
+            pipeline=PerceptionPipeline(),
             sensor_store=self.sensor_store,
             frame_source=self._frame_source,
             result_publisher=self._result_publisher,
@@ -304,16 +290,12 @@ class JetsonRuntimeController:
                 interval_ms=self.config.perception_interval_ms,
             ),
         )
-        pipeline.warmup()
         self._perception_loop.start()
 
     def _stop_perception_loop(self) -> None:
         if self._perception_loop is None:
             return
         self._perception_loop.stop()
-        close = getattr(self._perception_loop.pipeline, "close", None)
-        if close is not None:
-            close()
         self._perception_loop = None
 
     def _start_heartbeat(self) -> None:
@@ -353,17 +335,3 @@ def _env_bool(name: str, default: bool) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _make_detector(config: RuntimeConfig):
-    """Build a :class:`PersonDetector` wired to the given runtime config."""
-    from src.perception.detector import DetectorConfig, PersonDetector
-
-    return PersonDetector(
-        DetectorConfig(
-            backend=config.runtime_backend,
-            engine_path=Path(config.engine_path),
-            pt_model_path=Path(config.pt_model_path),
-            input_scale=config.detector_input_scale,
-        )
-    )

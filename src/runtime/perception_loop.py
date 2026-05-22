@@ -19,8 +19,8 @@ from src.transport.results import (
 
 
 class FrameSource(Protocol):
-    frame_ready: threading.Event
-    def latest(self) -> CameraFrame | None: ...
+    def latest(self) -> CameraFrame | None:
+        ...
 
 
 class PerceptionPipeline(Protocol):
@@ -34,17 +34,19 @@ class PerceptionPipeline(Protocol):
         timestamp_us: int = 0,
         frame_id: int | None = None,
         delta_time_s: float = 0.1,
-    ) -> tuple[list[FusedEntity], dict[str, float]]: ...
+    ) -> tuple[list[FusedEntity], dict[str, float]]:
+        ...
 
 
 class ResultPublisher(Protocol):
-    def publish(self, message: PerceptionResultMessage) -> None: ...
+    def publish(self, message: PerceptionResultMessage) -> None:
+        ...
 
 
 @dataclass(frozen=True, slots=True)
 class PerceptionLoopConfig:
     source_id: str = "adaptive-runtime"
-    interval_ms: int = 33  # ~30 FPS poll rate (was 100ms = max 10 FPS)
+    interval_ms: int = 100
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +94,6 @@ class RuntimePerceptionLoop:
 
     def stop(self, timeout_s: float = 1.0) -> None:
         self._stop_event.set()
-        self.frame_source.frame_ready.set()
         if self._thread:
             self._thread.join(timeout=timeout_s)
 
@@ -111,18 +112,14 @@ class RuntimePerceptionLoop:
 
     def process_once(self, frame: CameraFrame) -> PerceptionResultMessage:
         decode_start = perf_counter()
-        if frame.frame_bgr is not None:
-            frame_bgr = frame.frame_bgr
-        else:
-            frame_bgr = decode_jpeg_frame(frame.payload)
+        frame_bgr = decode_jpeg_frame(frame.payload)
         camera_ms = (perf_counter() - decode_start) * 1000.0
         delta_time_s = self._delta_time_s(frame)
 
-        lidar = self.sensor_store.lidar_nearest(frame.timestamp_us) or self.sensor_store.latest_lidar()
-        imu = self.sensor_store.imu_nearest(frame.timestamp_us) or self.sensor_store.latest_imu()
+        lidar = self.sensor_store.latest_lidar()
+        imu = self.sensor_store.latest_imu()
         entities, timings = self.pipeline.process(
             frame_bgr,
-            depth_map_m=frame.depth_map_m,
             lidar_scan=lidar.scan_points if lidar is not None else None,
             accel_xyz_mps2=imu.accel_xyz_mps2 if imu is not None else None,
             quat_xyzw=imu.quat_xyzw if imu is not None else None,
@@ -147,13 +144,11 @@ class RuntimePerceptionLoop:
         return message
 
     def _run(self) -> None:
+        interval_s = max(self.config.interval_ms, 10) / 1000.0
         while not self._stop_event.is_set():
-            self.frame_source.frame_ready.wait()
-            self.frame_source.frame_ready.clear()
-            if self._stop_event.is_set():
-                break
             frame = self.frame_source.latest()
             if frame is None or frame.sequence == self._last_frame_sequence:
+                time.sleep(interval_s)
                 continue
             try:
                 self.process_once(frame)
@@ -161,8 +156,7 @@ class RuntimePerceptionLoop:
                 with self._lock:
                     self._publish_errors += 1
                     self._last_error = str(exc)
-                # Short sleep on error to avoid tight spin — do NOT sleep interval_s
-                time.sleep(0.005)
+                time.sleep(interval_s)
 
     def _delta_time_s(self, frame: CameraFrame) -> float:
         if self._last_frame_timestamp_us is None:
@@ -192,9 +186,7 @@ def build_result_message(
     total_ms = float(timings.get("total_ms", 0.0))
     if total_ms <= 0.0:
         total_ms = sum(float(value) for value in timings.values())
-    # FPS reflects pipeline throughput — exclude camera_ms (I/O, not compute)
-    pipeline_ms = total_ms - float(timings.get("camera_ms", 0.0))
-    fps = 1000.0 / pipeline_ms if pipeline_ms > 0.0 else 0.0
+    fps = 1000.0 / total_ms if total_ms > 0.0 else 0.0
     return PerceptionResultMessage(
         source_id=source_id,
         sequence=sequence,
@@ -213,16 +205,10 @@ def build_result_message(
 def _to_tracked_entity(entity: FusedEntity) -> TrackedEntityMessage:
     return TrackedEntityMessage(
         track_id=int(entity.track_id),
-        class_id=float(entity.class_id),
         bbox_xywh=entity.bbox_xywh.astype(np.float32, copy=True),
-        contour_xy=entity.contour_xy.astype(np.float32, copy=True),
-        contour_points_xyz_m=entity.contour_points_xyz_m.astype(np.float32, copy=True),
         position_xyz_m=entity.position_3d.astype(np.float32, copy=True),
         velocity_xyz_mps=entity.velocity_3d.astype(np.float32, copy=True),
         heading_rad=float(entity.heading_rad),
         confidence=float(entity.confidence),
         nearest_obstacle_distance_m=entity.nearest_obstacle_distance_m,
-        distance_to_robot_m=entity.distance_to_robot_m,
-        distance_source=entity.distance_source,
-        sync_confidence=float(entity.sync_confidence),
     )

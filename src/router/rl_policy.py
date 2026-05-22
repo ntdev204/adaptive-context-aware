@@ -274,7 +274,9 @@ def evaluate_action(action: RoutingAction, scenario: RLScenario) -> tuple[float,
     latency_penalty = 0.08 * int(action)
     energy_penalty = 0.06 * int(action) * max(0.2, 1.0 - scenario.soh_budget)
     anomaly_bonus = (
-        0.2 if scenario.expected_action == RoutingAction.EMERGENCY and action == scenario.expected_action else 0.0
+        0.2
+        if scenario.expected_action == RoutingAction.EMERGENCY and action == scenario.expected_action
+        else 0.0
     )
     reward = accuracy - latency_penalty - energy_penalty + anomaly_bonus
     return reward, {
