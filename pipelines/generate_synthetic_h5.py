@@ -440,7 +440,9 @@ def _write_sequence(
         for frame_offset, source_frame_id, frame_bgr in frame_iter:
             timestamp_us = _frame_timestamp_us(metadata.start_time, source_frame_id or frame_offset, fps)
             delta_time_s = (
-                (timestamp_us - previous_timestamp_us) / 1_000_000.0 if previous_timestamp_us is not None else 1.0 / fps
+                (timestamp_us - previous_timestamp_us) / 1_000_000.0
+                if previous_timestamp_us is not None
+                else 1.0 / fps
             )
             previous_timestamp_us = timestamp_us
             detections = _detect_for_frame(
@@ -739,7 +741,8 @@ def _direction_from_delta(delta: np.ndarray) -> str:
 
 def _trajectory_from_delta(center: np.ndarray, delta: np.ndarray) -> list[list[float]]:
     return [
-        [round(float(center[0] + delta[0] * step), 3), round(float(center[1] + delta[1] * step), 3)] for step in (1, 2)
+        [round(float(center[0] + delta[0] * step), 3), round(float(center[1] + delta[1] * step), 3)]
+        for step in (1, 2)
     ]
 
 
@@ -812,22 +815,14 @@ def _read_partial_h5(path: Path) -> dict[str, object]:
         lidar_scans, lidar_num_points = _read_optional_lidar(handle, len(rgb_frames))
         lidar_timestamps = _read_optional_timestamps(handle, "lidar_scans", rgb_timestamps)
         imu_accel, imu_gyro, imu_quat, imu_timestamps = _read_optional_imu(handle, rgb_timestamps)
-        frame_annotations, scene_annotations = _read_optional_annotations(
-            handle, rgb_timestamps, config_context="UNKNOWN"
-        )
+        frame_annotations, scene_annotations = _read_optional_annotations(handle, rgb_timestamps, config_context="UNKNOWN")
         source_metadata = {
             "session_id": metadata_group.attrs.get("session_id") if metadata_group is not None else path.stem,
-            "start_time": int(
-                metadata_group.attrs.get("start_time", int(rgb_timestamps[0]) if len(rgb_timestamps) else 0)
-            )
+            "start_time": int(metadata_group.attrs.get("start_time", int(rgb_timestamps[0]) if len(rgb_timestamps) else 0))
             if metadata_group is not None
-            else int(rgb_timestamps[0])
-            if len(rgb_timestamps)
-            else 0,
+            else int(rgb_timestamps[0]) if len(rgb_timestamps) else 0,
             "duration_s": float(metadata_group.attrs.get("duration_s", 0.0)) if metadata_group is not None else 0.0,
-            "environment": metadata_group.attrs.get("environment", "UNKNOWN")
-            if metadata_group is not None
-            else "UNKNOWN",
+            "environment": metadata_group.attrs.get("environment", "UNKNOWN") if metadata_group is not None else "UNKNOWN",
         }
         missing_modalities: list[str] = []
         if np.isnan(depth_frames).all():
@@ -895,27 +890,13 @@ def _read_optional_lidar(handle: h5py.File, frame_count: int) -> tuple[np.ndarra
     return lidar_data, num_points
 
 
-def _read_optional_imu(
-    handle: h5py.File, fallback_timestamps: np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def _read_optional_imu(handle: h5py.File, fallback_timestamps: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     frame_count = len(fallback_timestamps)
     if "imu" in handle:
         imu_group = handle["imu"]
-        accel = (
-            np.asarray(imu_group["accel"][...], dtype=np.float32)
-            if "accel" in imu_group
-            else np.repeat(MISSING_IMU_ACCEL[None, :], frame_count, axis=0)
-        )
-        gyro = (
-            np.asarray(imu_group["gyro"][...], dtype=np.float32)
-            if "gyro" in imu_group
-            else np.repeat(MISSING_IMU_GYRO[None, :], frame_count, axis=0)
-        )
-        quat = (
-            np.asarray(imu_group["quat"][...], dtype=np.float32)
-            if "quat" in imu_group
-            else np.repeat(MISSING_IMU_QUAT[None, :], frame_count, axis=0)
-        )
+        accel = np.asarray(imu_group["accel"][...], dtype=np.float32) if "accel" in imu_group else np.repeat(MISSING_IMU_ACCEL[None, :], frame_count, axis=0)
+        gyro = np.asarray(imu_group["gyro"][...], dtype=np.float32) if "gyro" in imu_group else np.repeat(MISSING_IMU_GYRO[None, :], frame_count, axis=0)
+        quat = np.asarray(imu_group["quat"][...], dtype=np.float32) if "quat" in imu_group else np.repeat(MISSING_IMU_QUAT[None, :], frame_count, axis=0)
         timestamps = (
             np.asarray(imu_group["timestamps"][...], dtype=np.uint64)
             if "timestamps" in imu_group
@@ -936,6 +917,7 @@ def _read_optional_annotations(
     *,
     config_context: str,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    frame_count = len(rgb_timestamps)
     if "annotations" in handle:
         frame_values = (
             [json.loads(item) for item in handle["annotations"]["frame_annotations"].asstr()[...]]
@@ -964,9 +946,7 @@ def _read_optional_annotations(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Normalize heterogeneous data/raw sources into unified HDF5 sessions under data/synthetic."
-    )
+    parser = argparse.ArgumentParser(description="Normalize heterogeneous data/raw sources into unified HDF5 sessions under data/synthetic.")
     defaults = DEFAULT_SYNTHETIC_H5_CONFIG
     parser.add_argument("--raw-dir", type=Path, default=defaults.raw_dir)
     parser.add_argument("--output-dir", type=Path, default=defaults.output_dir)

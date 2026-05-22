@@ -17,11 +17,6 @@ def _track(track_id: int, x: float, y: float, z: float) -> TrackState:
         age=2,
         missed_frames=0,
         confidence=0.9,
-        class_id=0.0,
-        contour_xy=np.array([[100.0, 80.0], [140.0, 80.0], [140.0, 200.0], [100.0, 200.0]], dtype=np.float32),
-        contour_points_xyz_m=np.array(
-            [[x, y, z], [x + 0.1, y, z], [x + 0.1, y + 0.1, z], [x, y + 0.1, z]], dtype=np.float32
-        ),
     )
 
 
@@ -50,16 +45,11 @@ def test_sensor_fusion_outputs_complete_entity_fields() -> None:
     assert len(fused) == 1
     entity = fused[0]
     assert entity.track_id == 1
-    assert entity.class_id == 0.0
-    assert entity.contour_xy.shape == (4, 2)
     assert entity.position_3d.shape == (3,)
     assert entity.velocity_3d.shape == (3,)
     assert entity.heading_rad == 0.3
     assert entity.nearest_obstacle_distance_m is not None
     assert entity.nearest_obstacle_centroid_xy is not None
-    assert entity.distance_to_robot_m is not None
-    assert entity.distance_source == "depth_lidar_fused"
-    assert entity.sync_confidence > 0.0
     assert entity.ego_velocity_xyz_mps.shape == (3,)
 
 

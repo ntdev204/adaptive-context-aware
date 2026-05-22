@@ -4,27 +4,30 @@ Supports any :class:`InputSource` (image, video, or camera).
 Depth map is **optional**; when omitted a flat zero-depth plane is used
 so the tracker still runs in 2-D mode with position_3d.z = 0.
 
-Performance tuning
-------------------
-Two knobs are available to reduce detector latency without changing the model:
-
-1. **input_scale** on :class:`~src.perception.detector.DetectorConfig`:
-   Downscale the frame before inference and rescale boxes back.
-   ``0.5`` → 320×240 instead of 640×480, typically 2-4× faster on GPU/TRT.
-
-2. **detect_every_n** on :class:`PerceptionPipeline`:
-   Run the detector only on every Nth frame; on intermediate frames the
-   tracker is updated with the previous detections (zero inference cost).
-   Example: ``detect_every_n=3`` → average detector cost ÷ 3.
-
 Example – run on a video file::
 
-    pipeline = PerceptionPipeline(detect_every_n=3)
+    pipeline = PerceptionPipeline()
     source   = InputSource.from_video("campus.mp4")
 
     with source:
         for entities, timings in pipeline.run_source(source):
             print(timings["total_ms"])
+
+Example – run on a single image::
+
+    pipeline = PerceptionPipeline()
+    source   = InputSource.from_image("photo.jpg")
+    with source:
+        for entities, timings in pipeline.run_source(source):
+            ...
+
+Example – run on live camera::
+
+    pipeline = PerceptionPipeline()
+    source   = InputSource.from_camera(device_index=0)
+    with source:
+        for entities, timings in pipeline.run_source(source):
+            ...
 """
 
 from __future__ import annotations
@@ -50,19 +53,10 @@ from .tracker import MultiObjectTracker
 
 _FLAT_DEPTH_Z_M = 5.0  # assumed depth when no real depth map is available
 
-# Pre-allocated constant — avoids 1.2MB numpy allocation every frame
-_FLAT_DEPTH_CACHE: np.ndarray = np.full(DEPTH_SHAPE_HW, _FLAT_DEPTH_Z_M, dtype=np.float32)
-_FLAT_DEPTH_CACHE.flags.writeable = False  # immutable to prevent accidental mutation
-
 
 def _make_flat_depth() -> np.ndarray:
-    """Return a read-only constant-depth plane (all pixels = _FLAT_DEPTH_Z_M)."""
-    return _FLAT_DEPTH_CACHE
-
-
-def _empty_detections_factory() -> np.ndarray:
-    """Factory for default _last_detections field (needed by dataclass)."""
-    return np.zeros((0, 6), dtype=np.float32)
+    """Return a constant-depth plane (all pixels = _FLAT_DEPTH_Z_M)."""
+    return np.full(DEPTH_SHAPE_HW, _FLAT_DEPTH_Z_M, dtype=np.float32)
 
 
 @dataclass(slots=True)
@@ -76,12 +70,7 @@ class PerceptionPipelineReport:
 @dataclass(slots=True)
 class PerceptionPipeline:
     detector: PersonDetector = field(
-        default_factory=lambda: PersonDetector(
-            DetectorConfig(
-                backend=os.environ.get("CTX_RUNTIME_BACKEND", "engine"),
-                input_scale=float(os.environ.get("CTX_DETECTOR_INPUT_SCALE", "1.0")),
-            )
-        )
+        default_factory=lambda: PersonDetector(DetectorConfig(backend=os.environ.get("CTX_RUNTIME_BACKEND", "engine")))
     )
     depth_processor: DepthProcessor = field(
         default_factory=lambda: DepthProcessor(CameraIntrinsics(fx=400.0, fy=400.0, cx=320.0, cy=240.0))
@@ -94,29 +83,9 @@ class PerceptionPipeline:
     tracker_config_path: str = field(
         default_factory=lambda: os.environ.get("CTX_TRACKER_CONFIG_PATH", "models/fine_tuning/botsort_tuned.json")
     )
-    detect_every_n: int = field(default_factory=lambda: int(os.environ.get("CTX_DETECT_EVERY_N", "3")))
-    """Run the full detector every N frames; intermediate frames use the tracker only.
-
-    This reduces average detector cost by a factor of N with minimal accuracy loss
-    because the tracker propagates bounding boxes between detection frames.
-
-    Default is 3 (set via ``CTX_DETECT_EVERY_N`` env var).
-    For maximum accuracy set to 1 (detect every frame).
-    Recommended range: 2-4 depending on scene speed and latency budget.
-    """
-
-    # Internal state — not part of the public dataclass interface
-    _frame_count: int = field(default=0, init=False, repr=False)
-    _last_detections: np.ndarray = field(default_factory=_empty_detections_factory, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.tracker = self._load_tracker(self.tracker_config_path)
-
-    def warmup(self) -> None:
-        self.detector.warmup()
-
-    def close(self) -> None:
-        self.detector.close()
 
     # ------------------------------------------------------------------
     # Tracker factory
@@ -164,30 +133,14 @@ class PerceptionPipeline:
 
         Returns:
             (entities, timings) where timings maps stage name → ms elapsed.
-
-        Notes:
-            When ``detect_every_n > 1``, the detector runs only on every Nth frame.
-            Intermediate frames reuse the last detections from the detector and pass
-            them directly to the tracker (zero inference cost). The timing key
-            ``"detector_ms"`` will be 0 on skip frames.
         """
         timings: dict[str, float] = {}
 
-        # Use pre-allocated cache — zero allocation when no real depth map
         if depth_map_m is None:
             depth_map_m = _make_flat_depth()
 
-        # ---- Frame-skip detection ----------------------------------------
-        # Run the expensive detector only every N frames; on skip frames the
-        # tracker updates against the previous detection bboxes (very fast).
-        self._frame_count += 1
-        is_detection_frame = (self._frame_count % max(self.detect_every_n, 1)) == 1
-
         start = perf_counter()
-        if is_detection_frame:
-            self._last_detections = self.detector.detect(frame_bgr, frame_id=frame_id).detections
-        # Skip frame: detector_ms = 0 (no call)
-        detections = self._last_detections
+        detections = self.detector.detect(frame_bgr, frame_id=frame_id).detections
         timings["detector_ms"] = (perf_counter() - start) * 1000.0
 
         start = perf_counter()
@@ -205,6 +158,10 @@ class PerceptionPipeline:
         lidar_clusters = self.lidar_processor.cluster_scan(lidar_scan) if lidar_scan is not None else []
         fused = self.sensor_fusion.fuse(tracks, ego_motion, lidar_clusters)
         timings["fusion_ms"] = (perf_counter() - start) * 1000.0
+
+        start = perf_counter()
+        _features = [self.feature_extractor.extract(entity) for entity in fused]
+        timings["feature_ms"] = (perf_counter() - start) * 1000.0
 
         timings["total_ms"] = sum(timings.values())
         return fused, timings
