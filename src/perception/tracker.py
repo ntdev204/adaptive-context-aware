@@ -1,10 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
 from .depth_proc import DepthBoundingBox3D
+
+
+def _empty_contour_xy() -> np.ndarray:
+    return np.zeros((0, 2), dtype=np.float32)
+
+
+def _empty_contour_points_xyz_m() -> np.ndarray:
+    return np.zeros((0, 3), dtype=np.float32)
 
 
 @dataclass(slots=True)
@@ -16,6 +24,9 @@ class TrackState:
     age: int
     missed_frames: int
     confidence: float
+    class_id: float = 0.0
+    contour_xy: np.ndarray = field(default_factory=_empty_contour_xy)
+    contour_points_xyz_m: np.ndarray = field(default_factory=_empty_contour_points_xyz_m)
 
 
 class MultiObjectTracker:
@@ -54,6 +65,9 @@ class MultiObjectTracker:
             track.age += 1
             track.missed_frames = 0
             track.confidence = float(detection[4])
+            track.class_id = float(depth_box.class_id)
+            track.contour_xy = depth_box.contour_xy.copy()
+            track.contour_points_xyz_m = depth_box.contour_points_xyz_m.copy()
 
         for track_index in unmatched_tracks:
             self._tracks[track_index].missed_frames += 1
@@ -71,6 +85,9 @@ class MultiObjectTracker:
                     age=1,
                     missed_frames=0,
                     confidence=float(detection[4]),
+                    class_id=float(depth_box.class_id),
+                    contour_xy=depth_box.contour_xy.copy(),
+                    contour_points_xyz_m=depth_box.contour_points_xyz_m.copy(),
                 )
             )
             self._next_track_id += 1
@@ -141,4 +158,7 @@ class MultiObjectTracker:
             age=track.age,
             missed_frames=track.missed_frames,
             confidence=track.confidence,
+            class_id=track.class_id,
+            contour_xy=track.contour_xy.copy(),
+            contour_points_xyz_m=track.contour_points_xyz_m.copy(),
         )

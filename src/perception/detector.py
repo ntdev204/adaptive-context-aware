@@ -31,6 +31,7 @@ class DetectorConfig:
     pt_model_path: Path | None = None
     """Path to ``.pt`` detector weights (pt backend). Falls back to ``CTX_PT_MODEL_PATH`` env var."""
 
+
 @dataclass(slots=True)
 class DetectorResult:
     detections: np.ndarray

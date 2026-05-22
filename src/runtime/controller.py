@@ -260,6 +260,7 @@ class JetsonRuntimeController:
                     read_interval_ms=max(1, int(1000 / max(self.config.camera_fps, 1))),
                     publish_port=self.config.camera_publish_port,
                     publish_enabled=_env_bool("CTX_CAMERA_PUBLISH_ENABLED", True),
+                    publish_depth_preview=_env_bool("CTX_CAMERA_PUBLISH_DEPTH_PREVIEW", False),
                 )
             )
         return None
