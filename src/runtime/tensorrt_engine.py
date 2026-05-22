@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import importlib
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 
 import numpy as np
 
@@ -11,6 +12,10 @@ import numpy as np
 class EngineRunner(Protocol):
     def run(self, *inputs: np.ndarray) -> np.ndarray:
         """Run one TensorRT-backed inference and return the first output."""
+
+
+class TensorRTEngineLoadError(RuntimeError):
+    """Raised when a TensorRT artifact cannot be loaded on the current runtime."""
 
 
 class TensorRTEngineRunner:
@@ -21,19 +26,14 @@ class TensorRTEngineRunner:
             raise FileNotFoundError(f"TensorRT engine not found: {engine_path}")
 
         errors: list[str] = []
-        try:
-            self.runner: EngineRunner = _TorchScriptTensorRTRunner(engine_path)
-            return
-        except Exception as exc:
-            errors.append(f"torch-tensorrt artifact load failed: {exc}")
+        for loader_name, loader in _preferred_engine_loaders(engine_path, input_names):
+            try:
+                self.runner = loader()
+                return
+            except Exception as exc:
+                errors.append(f"{loader_name} load failed: {exc}")
 
-        try:
-            self.runner = _RawTensorRTRunner(engine_path, input_names)
-            return
-        except Exception as exc:
-            errors.append(f"raw TensorRT engine load failed: {exc}")
-
-        raise RuntimeError(f"unable to load TensorRT engine {engine_path}: {'; '.join(errors)}")
+        raise TensorRTEngineLoadError(_format_engine_load_error(engine_path, errors))
 
     def run(self, *inputs: np.ndarray) -> np.ndarray:
         return self.runner.run(*inputs)
@@ -86,7 +86,11 @@ class _RawTensorRTRunner:
         runtime = trt.Runtime(self.logger)
         self.engine = runtime.deserialize_cuda_engine(engine_path.read_bytes())
         if self.engine is None:
-            raise RuntimeError("TensorRT could not deserialize engine bytes")
+            raise TensorRTEngineLoadError(
+                f"TensorRT could not deserialize {engine_path}. "
+                "The engine is likely incompatible with this Jetson runtime; rebuild it on the target device "
+                "with the same JetPack/TensorRT stack."
+            )
         self.context = self.engine.create_execution_context()
         if self.context is None:
             raise RuntimeError("TensorRT could not create execution context")
@@ -272,3 +276,33 @@ def _load_cudart_module() -> object:
 def _looks_like_cudart(candidate: object) -> bool:
     required = ("cudaMalloc", "cudaMemcpy", "cudaDeviceSynchronize", "cudaFree", "cudaMemcpyKind")
     return all(hasattr(candidate, name) for name in required)
+
+
+def _preferred_engine_loaders(
+    engine_path: Path,
+    input_names: tuple[str, ...],
+) -> tuple[tuple[str, Callable[[], EngineRunner]], ...]:
+    if _looks_like_torchscript_archive(engine_path):
+        return (
+            ("torch-tensorrt artifact", lambda: _TorchScriptTensorRTRunner(engine_path)),
+            ("raw TensorRT engine", lambda: _RawTensorRTRunner(engine_path, input_names)),
+        )
+    return (
+        ("raw TensorRT engine", lambda: _RawTensorRTRunner(engine_path, input_names)),
+        ("torch-tensorrt artifact", lambda: _TorchScriptTensorRTRunner(engine_path)),
+    )
+
+
+def _looks_like_torchscript_archive(engine_path: Path) -> bool:
+    try:
+        return zipfile.is_zipfile(engine_path)
+    except OSError:
+        return False
+
+
+def _format_engine_load_error(engine_path: Path, errors: list[str]) -> str:
+    detail = "; ".join(errors) if errors else "no loader details available"
+    return (
+        f"unable to load TensorRT engine {engine_path}: {detail}. "
+        "If this is a serialized TensorRT plan, rebuild it on the target Jetson with the same runtime image."
+    )

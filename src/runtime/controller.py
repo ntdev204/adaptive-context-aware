@@ -130,8 +130,8 @@ class JetsonRuntimeController:
         try:
             self._ingest.start()
             self._result_publisher.start()
-            self._start_frame_source()
             self._start_perception_loop()
+            self._start_frame_source()
             self._start_heartbeat()
         except Exception as exc:
             self._stop_perception_loop()

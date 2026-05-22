@@ -137,6 +137,25 @@ def test_local_camera_source_does_not_publish_oversized_jpeg() -> None:
     assert source.stats().last_error == f"encoded JPEG exceeds {MAX_JPEG_BYTES} bytes"
 
 
+def test_local_camera_source_stop_does_not_force_close_stuck_capture_thread() -> None:
+    class StuckThread:
+        def join(self, timeout=None) -> None:
+            del timeout
+
+        def is_alive(self) -> bool:
+            return True
+
+    source = LocalCameraFrameSource(LocalCameraFrameConfig(publish_enabled=False))
+    source._thread = StuckThread()
+    close_calls: list[str] = []
+    source._close_camera = lambda: close_calls.append("closed")
+
+    source.stop(timeout_s=0.01)
+
+    assert close_calls == []
+    assert source.stats().last_error == "camera shutdown timed out; leaving OpenNI cleanup to the capture thread"
+
+
 # ---------------------------------------------------------------------------
 # Event-based perception loop
 # ---------------------------------------------------------------------------
