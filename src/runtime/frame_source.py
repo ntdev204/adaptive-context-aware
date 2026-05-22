@@ -172,7 +172,14 @@ class LocalCameraFrameSource:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=timeout_s)
-        self._close_camera()
+            if self._thread.is_alive():
+                with self._lock:
+                    self._last_error = "camera shutdown timed out; leaving OpenNI cleanup to the capture thread"
+            else:
+                self._thread = None
+                self._close_camera()
+        else:
+            self._close_camera()
         if self._publisher:
             self._publisher.close(linger=0)
             self._publisher = None
