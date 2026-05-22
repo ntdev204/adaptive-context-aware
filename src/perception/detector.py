@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+import cv2
 import numpy as np
 
 from src.runtime.tensorrt_engine import TensorRTEngineRunner
@@ -20,6 +21,23 @@ def _empty_detections() -> np.ndarray:
     return np.zeros((0, 6), dtype=np.float32)
 
 
+def _rescale_boxes(detections: np.ndarray, scale: float) -> np.ndarray:
+    """Scale xywh columns of detections by *scale* (in-place safe copy).
+
+    Args:
+        detections: float32 array of shape [N, 6] with columns [x, y, w, h, conf, cls].
+        scale:      Multiplicative factor applied to x, y, w, h.
+
+    Returns:
+        New float32 array with the first 4 columns scaled.
+    """
+    if detections.size == 0:
+        return detections
+    out = detections.copy()
+    out[:, :4] *= scale
+    return out
+
+
 @dataclass(slots=True)
 class DetectorConfig:
     backend: str = "engine"
@@ -30,6 +48,14 @@ class DetectorConfig:
     """Path to ``.engine`` file (engine backend). Falls back to ``CTX_ENGINE_MODEL_PATH`` env var."""
     pt_model_path: Path | None = None
     """Path to ``.pt`` detector weights (pt backend). Falls back to ``CTX_PT_MODEL_PATH`` env var."""
+    engine_fallback_backend: str | None = None
+    """Optional backend to try when TensorRT is unavailable. Defaults to ``CTX_ENGINE_FALLBACK_BACKEND``."""
+    input_scale: float = 1.0
+    """Downscale factor applied before inference (e.g. 0.5 = half resolution).
+    Output boxes are rescaled back to original frame coordinates automatically.
+    Recommended: 0.5 for Jetson (reduces 640x480→320x240, ~2-4x speedup).
+    Set via ``CTX_DETECTOR_INPUT_SCALE`` env var.
+    """
 
 
 @dataclass(slots=True)
@@ -54,7 +80,13 @@ class PersonDetector:
 
     * ``"engine"``    – TensorRT ``.engine`` file via :class:`TensorRTEngineRunner`
                         (optimised for Jetson / CUDA devices).
+    * ``"pt"``        – Ultralytics YOLO ``.pt`` weights (CPU/GPU fallback).
     * ``"synthetic"`` – JSON annotation files used for offline unit tests.
+
+    Input scaling:
+        Set ``DetectorConfig.input_scale`` (or env ``CTX_DETECTOR_INPUT_SCALE``) to a
+        value < 1.0 to downscale the frame before inference. Output boxes are
+        automatically rescaled back to the original frame coordinate space.
     """
 
     def __init__(self, config: DetectorConfig | None = None, runtime: DetectorRuntime | None = None) -> None:
@@ -75,11 +107,9 @@ class PersonDetector:
         self._runtime = None
 
     def preprocess(self, frame_bgr: np.ndarray) -> np.ndarray:
-        if frame_bgr.shape != (FRAME_HEIGHT, FRAME_WIDTH, 3):
-            raise ValueError(f"expected BGR frame with shape ({FRAME_HEIGHT}, {FRAME_WIDTH}, 3)")
+        """Convert a BGR frame (any resolution) to a normalised NCHW batch tensor."""
         if frame_bgr.dtype != np.uint8:
             raise ValueError("expected uint8 BGR frame")
-
         chw = np.transpose(frame_bgr, (2, 0, 1)).astype(np.float32) / 255.0
         return chw[np.newaxis, ...]
 
@@ -91,20 +121,41 @@ class PersonDetector:
                 backend=self.config.backend,
             )
 
+        # Apply input downscaling before inference (speeds up engine/pt ~2-4x at scale=0.5)
+        scale = float(self.config.input_scale)
+        infer_frame = _scale_frame(frame_bgr, scale) if scale != 1.0 else frame_bgr
+
         if self.config.backend == "pt":
-            detections = self._infer_pt(frame_bgr)
+            detections = self._infer_pt(infer_frame)
+            if scale != 1.0:
+                detections = _rescale_boxes(detections, 1.0 / scale)
             return DetectorResult(detections=detections, backend=self.config.backend)
 
         # --- engine (TensorRT) backend ---
-        input_batch = self.preprocess(frame_bgr)
+        input_batch = self.preprocess(infer_frame)
         try:
             raw_output = self._get_runtime().run(input_batch)
         except FileNotFoundError:
             raise
         except Exception as exc:
+            fallback = self._engine_fallback_backend()
+            if fallback == "pt":
+                try:
+                    detections = self._infer_pt(infer_frame)
+                    if scale != 1.0:
+                        detections = _rescale_boxes(detections, 1.0 / scale)
+                    return DetectorResult(detections=detections, backend="pt")
+                except Exception as fallback_exc:
+                    raise TensorRTInferenceUnavailableError(
+                        f"TensorRT detector inference failed: {exc}; pt fallback failed: {fallback_exc}"
+                    ) from fallback_exc
             raise TensorRTInferenceUnavailableError(f"TensorRT detector inference failed: {exc}") from exc
-        detections = self._postprocess(raw_output, frame_shape=frame_bgr.shape)
-        return DetectorResult(detections=self._filter_person_class(detections), backend=self.config.backend)
+
+        detections = self._postprocess(raw_output, frame_shape=infer_frame.shape)
+        detections = self._filter_person_class(detections)
+        if scale != 1.0:
+            detections = _rescale_boxes(detections, 1.0 / scale)
+        return DetectorResult(detections=detections, backend=self.config.backend)
 
     # ------------------------------------------------------------------
     # Engine (TensorRT) backend helpers
@@ -122,6 +173,17 @@ class PersonDetector:
                 raise FileNotFoundError(f"missing TensorRT engine: {engine_path}")
             self._runtime = TensorRTEngineRunner(engine_path, ("images",))
         return self._runtime
+
+    def _engine_fallback_backend(self) -> str | None:
+        backend = self.config.engine_fallback_backend
+        if backend is None:
+            backend = os.environ.get("CTX_ENGINE_FALLBACK_BACKEND")
+        if backend is None:
+            return None
+        backend = backend.strip().lower()
+        if backend in {"", "none", "off", "disabled", "false", "0"}:
+            return None
+        return backend
 
     def _pt_model_path(self) -> Path:
         if self.config.pt_model_path is not None:
@@ -262,6 +324,16 @@ class PersonDetector:
         detections[:, 2] = np.clip(detections[:, 2], 0.0, float(width) - detections[:, 0])
         detections[:, 3] = np.clip(detections[:, 3], 0.0, float(height) - detections[:, 1])
         return detections.astype(np.float32, copy=False)
+
+
+# ------------------------------------------------------------------
+# Module-level helpers
+# ------------------------------------------------------------------
+
+
+def _scale_frame(frame_bgr: np.ndarray, scale: float) -> np.ndarray:
+    """Resize *frame_bgr* by *scale* using bilinear interpolation."""
+    return cv2.resize(frame_bgr, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
 
 
 def _nms_xywh(boxes_xywh: np.ndarray, scores: np.ndarray, iou_threshold: float) -> np.ndarray:

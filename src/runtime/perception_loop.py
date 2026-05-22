@@ -20,7 +20,6 @@ from src.transport.results import (
 
 class FrameSource(Protocol):
     frame_ready: threading.Event
-
     def latest(self) -> CameraFrame | None: ...
 
 
@@ -45,7 +44,7 @@ class ResultPublisher(Protocol):
 @dataclass(frozen=True, slots=True)
 class PerceptionLoopConfig:
     source_id: str = "adaptive-runtime"
-    interval_ms: int = 5
+    interval_ms: int = 33  # ~30 FPS poll rate (was 100ms = max 10 FPS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,6 +161,8 @@ class RuntimePerceptionLoop:
                 with self._lock:
                     self._publish_errors += 1
                     self._last_error = str(exc)
+                # Short sleep on error to avoid tight spin — do NOT sleep interval_s
+                time.sleep(0.005)
 
     def _delta_time_s(self, frame: CameraFrame) -> float:
         if self._last_frame_timestamp_us is None:
@@ -191,7 +192,9 @@ def build_result_message(
     total_ms = float(timings.get("total_ms", 0.0))
     if total_ms <= 0.0:
         total_ms = sum(float(value) for value in timings.values())
-    fps = 1000.0 / total_ms if total_ms > 0.0 else 0.0
+    # FPS reflects pipeline throughput — exclude camera_ms (I/O, not compute)
+    pipeline_ms = total_ms - float(timings.get("camera_ms", 0.0))
+    fps = 1000.0 / pipeline_ms if pipeline_ms > 0.0 else 0.0
     return PerceptionResultMessage(
         source_id=source_id,
         sequence=sequence,
