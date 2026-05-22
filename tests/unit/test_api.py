@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+import pytest
 from fastapi.testclient import TestClient
 
 from src.api.app import create_app
-from src.runtime.controller import JetsonRuntimeController, RuntimeConfig
+from src.runtime.controller import JetsonRuntimeController, RuntimeConfig, RuntimeState
 
 
 def _client() -> TestClient:
@@ -54,3 +57,18 @@ def test_control_plane_exposes_config_and_metrics() -> None:
 def test_http_frame_endpoint_is_not_available() -> None:
     response = _client().post("/v1/perception/frame")
     assert response.status_code == 404
+
+
+def test_autostart_raises_when_runtime_start_fails(monkeypatch) -> None:
+    monkeypatch.setenv("CTX_AUTOSTART", "1")
+
+    class FailingController:
+        def start(self):
+            return SimpleNamespace(state=RuntimeState.ERROR, reason="bad engine")
+
+        def stop(self):
+            return None
+
+    with pytest.raises(RuntimeError, match="bad engine"):
+        with TestClient(create_app(FailingController())):
+            pass

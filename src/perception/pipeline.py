@@ -87,6 +87,9 @@ class PerceptionPipeline:
     def __post_init__(self) -> None:
         self.tracker = self._load_tracker(self.tracker_config_path)
 
+    def warmup(self) -> None:
+        self.detector.warmup()
+
     # ------------------------------------------------------------------
     # Tracker factory
     # ------------------------------------------------------------------

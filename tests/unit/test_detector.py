@@ -104,7 +104,7 @@ def test_detector_engine_backend_wraps_runtime_errors(tmp_path) -> None:
         detector.detect(frame, frame_id=0)
 
 
-def test_detector_engine_backend_falls_back_to_pt_when_available(tmp_path, monkeypatch) -> None:
+def test_detector_engine_backend_raises_when_runtime_fails(tmp_path) -> None:
     class BadRuntime:
         def run(self, input_batch: np.ndarray) -> np.ndarray:
             del input_batch
@@ -118,13 +118,37 @@ def test_detector_engine_backend_falls_back_to_pt_when_available(tmp_path, monke
         DetectorConfig(engine_path=engine_path, pt_model_path=pt_model_path),
         runtime=BadRuntime(),
     )
-    fallback_detections = np.array([[1.0, 2.0, 3.0, 4.0, 0.8, 0.0]], dtype=np.float32)
-    monkeypatch.setattr(detector, "_infer_pt", lambda frame: fallback_detections)
 
-    result = detector.detect(np.zeros((480, 640, 3), dtype=np.uint8), frame_id=0)
+    with pytest.raises(TensorRTInferenceUnavailableError, match="cuda unavailable"):
+        detector.detect(np.zeros((480, 640, 3), dtype=np.uint8), frame_id=0)
 
-    assert result.backend == "pt"
-    np.testing.assert_allclose(result.detections, fallback_detections)
+
+def test_detector_engine_init_failure_is_cached_and_raises(tmp_path, monkeypatch) -> None:
+    engine_path = tmp_path / "yolov8s.engine"
+    pt_model_path = tmp_path / "best.pt"
+    engine_path.write_bytes(b"fake-engine")
+    pt_model_path.write_bytes(b"fake-weights")
+
+    detector = PersonDetector(
+        DetectorConfig(engine_path=engine_path, pt_model_path=pt_model_path),
+    )
+    attempts = 0
+
+    def fake_tensorrt_runner(*args, **kwargs):
+        del args, kwargs
+        nonlocal attempts
+        attempts += 1
+        raise RuntimeError("bad engine")
+
+    monkeypatch.setattr("src.perception.detector.TensorRTEngineRunner", fake_tensorrt_runner)
+
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    with pytest.raises(TensorRTInferenceUnavailableError, match="bad engine"):
+        detector.detect(frame, frame_id=0)
+    with pytest.raises(TensorRTInferenceUnavailableError, match="bad engine"):
+        detector.detect(frame, frame_id=1)
+
+    assert attempts == 1
 
 
 def test_detector_raises_when_engine_missing() -> None:

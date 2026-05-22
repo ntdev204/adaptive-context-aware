@@ -106,43 +106,45 @@ def export_model(
         log.error("Model not found: %s", pt_path)
         return False
 
-    engine_path.parent.mkdir(parents=True, exist_ok=True)
-    log.info(
-        "Exporting %s -> %s  [FP16=%s, workspace=%dGB, imgsz=%s]",
-        pt_path,
-        engine_path,
-        fp16,
-        workspace,
-        imgsz,
-    )
-
-    from ultralytics import YOLO
-
-    model = YOLO(str(pt_path))
-
-    log.info("Running TensorRT export (this takes 3-10 min on Jetson Orin)...")
-    exported = Path(
-        model.export(
-            format="engine",
-            device=0,
-            half=fp16,
-            imgsz=imgsz,
-            workspace=workspace,
-            simplify=False,
-            verbose=False,
+    try:
+        engine_path.parent.mkdir(parents=True, exist_ok=True)
+        log.info(
+            "Exporting %s -> %s  [FP16=%s, workspace=%dGB, imgsz=%s]",
+            pt_path,
+            engine_path,
+            fp16,
+            workspace,
+            imgsz,
         )
-    )
 
-    if exported.exists() and exported.resolve() != engine_path.resolve():
-        exported.replace(engine_path)
+        from ultralytics import YOLO
 
-    if engine_path.exists():
-        size_mb = engine_path.stat().st_size / (1024**2)
-        log.info("Engine saved: %s (%.1f MB)", engine_path, size_mb)
-        return True
+        model = YOLO(str(pt_path))
 
-    log.error("Export failed -- engine not found at %s", engine_path)
-    return False
+        log.info("Running TensorRT export (this takes 3-10 min on Jetson Orin)...")
+        exported = Path(
+            model.export(
+                format="engine",
+                device=0,
+                half=fp16,
+                imgsz=imgsz,
+                workspace=workspace,
+                simplify=False,
+                verbose=False,
+            )
+        )
+        _finalize_exported_engine(exported, engine_path=engine_path, fp16=fp16, workspace_gb=workspace)
+    except Exception as exc:
+        log.error("Export failed for %s: %s", pt_path, exc)
+        return False
+
+    if not _is_valid_tensorrt_engine(engine_path):
+        log.error("Export produced an invalid TensorRT engine: %s", engine_path)
+        return False
+
+    size_mb = engine_path.stat().st_size / (1024**2)
+    log.info("Engine saved: %s (%.1f MB)", engine_path, size_mb)
+    return True
 
 
 def _iter_pt_files(model_root: Path, output_dir: Path) -> list[Path]:
@@ -171,6 +173,40 @@ def _resolve_outputs(pt_files: list[Path], output_dir: Path) -> dict[Path, Path]
         mapping[pt_path] = output_dir / engine_name
 
     return mapping
+
+
+def _finalize_exported_engine(exported: Path, *, engine_path: Path, fp16: bool, workspace_gb: int) -> Path:
+    del fp16, workspace_gb
+    if not exported.exists():
+        raise FileNotFoundError(f"Ultralytics export did not produce an artifact: {exported}")
+
+    direct_engine = exported if exported.suffix == ".engine" else exported.with_suffix(".engine")
+    if direct_engine.exists():
+        return _move_engine_artifact(direct_engine, engine_path)
+
+    raise RuntimeError(
+        f"Ultralytics returned {exported.name} but did not leave a sibling .engine artifact. "
+        "Expected direct TensorRT export; refusing to rename or consume a non-engine file."
+    )
+
+
+def _move_engine_artifact(source: Path, target: Path) -> Path:
+    if source.resolve() != target.resolve():
+        source.replace(target)
+    return target
+
+
+def _is_valid_tensorrt_engine(engine_path: Path) -> bool:
+    if not engine_path.exists():
+        return False
+    try:
+        import tensorrt as trt
+    except ImportError:
+        return True
+
+    runtime = trt.Runtime(trt.Logger(trt.Logger.ERROR))
+    engine = runtime.deserialize_cuda_engine(engine_path.read_bytes())
+    return engine is not None
 
 
 if __name__ == "__main__":

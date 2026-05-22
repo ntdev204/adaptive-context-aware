@@ -280,8 +280,10 @@ class JetsonRuntimeController:
 
         from src.perception.pipeline import PerceptionPipeline
 
+        pipeline = PerceptionPipeline()
+        pipeline.warmup()
         self._perception_loop = RuntimePerceptionLoop(
-            pipeline=PerceptionPipeline(),
+            pipeline=pipeline,
             sensor_store=self.sensor_store,
             frame_source=self._frame_source,
             result_publisher=self._result_publisher,

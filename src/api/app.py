@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from src.runtime.controller import JetsonRuntimeController, RuntimeConfig, RuntimeStatus
+from src.runtime.controller import JetsonRuntimeController, RuntimeConfig, RuntimeState, RuntimeStatus
 
 from .schemas import HealthResponse, RuntimeConfigResponse, RuntimeControlResponse, RuntimeMetricsResponse
 
@@ -16,7 +16,9 @@ def create_app(controller: JetsonRuntimeController | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         if _env_bool("CTX_AUTOSTART", False):
-            runtime.start()
+            status = runtime.start()
+            if status.state is RuntimeState.ERROR:
+                raise RuntimeError(status.reason or "runtime startup failed")
         try:
             yield
         finally:

@@ -31,7 +31,7 @@ class DetectorConfig:
     pt_model_path: Path | None = None
     """Path to ``.pt`` detector weights (pt backend). Falls back to ``CTX_PT_MODEL_PATH`` env var."""
     engine_fallback_backend: str | None = None
-    """Backend to try when TensorRT is unavailable. Defaults to ``CTX_ENGINE_FALLBACK_BACKEND`` or ``pt``."""
+    """Deprecated. Engine runtime now fails fast instead of falling back automatically."""
 
 
 @dataclass(slots=True)
@@ -63,6 +63,7 @@ class PersonDetector:
         self.config = config or DetectorConfig()
         self._runtime = runtime
         self._pt_model: Any | None = None
+        self._engine_init_error: Exception | None = None
 
     def preprocess(self, frame_bgr: np.ndarray) -> np.ndarray:
         if frame_bgr.shape != (FRAME_HEIGHT, FRAME_WIDTH, 3):
@@ -72,6 +73,12 @@ class PersonDetector:
 
         chw = np.transpose(frame_bgr, (2, 0, 1)).astype(np.float32) / 255.0
         return chw[np.newaxis, ...]
+
+    def warmup(self) -> None:
+        if self.config.backend != "engine":
+            return
+        dummy = np.zeros((FRAME_HEIGHT, FRAME_WIDTH, 3), dtype=np.uint8)
+        self.detect(dummy)
 
     def detect(self, frame_bgr: np.ndarray, frame_id: int | None = None) -> DetectorResult:
         # --- synthetic backend ---
@@ -92,14 +99,6 @@ class PersonDetector:
         except FileNotFoundError:
             raise
         except Exception as exc:
-            fallback = self._engine_fallback_backend()
-            if fallback == "pt":
-                try:
-                    return DetectorResult(detections=self._infer_pt(frame_bgr), backend="pt")
-                except Exception as fallback_exc:
-                    raise TensorRTInferenceUnavailableError(
-                        f"TensorRT detector inference failed: {exc}; pt fallback failed: {fallback_exc}"
-                    ) from fallback_exc
             raise TensorRTInferenceUnavailableError(f"TensorRT detector inference failed: {exc}") from exc
         detections = self._postprocess(raw_output, frame_shape=frame_bgr.shape)
         return DetectorResult(detections=self._filter_person_class(detections), backend=self.config.backend)
@@ -114,21 +113,18 @@ class PersonDetector:
         return Path(os.environ.get("CTX_ENGINE_MODEL_PATH", "/app/models/engines/best.engine"))
 
     def _get_runtime(self) -> DetectorRuntime:
+        if self._engine_init_error is not None:
+            raise self._engine_init_error
         if self._runtime is None:
             engine_path = self._engine_path()
             if not engine_path.exists():
                 raise FileNotFoundError(f"missing TensorRT engine: {engine_path}")
-            self._runtime = TensorRTEngineRunner(engine_path, ("images",))
+            try:
+                self._runtime = TensorRTEngineRunner(engine_path, ("images",))
+            except Exception as exc:
+                self._engine_init_error = exc
+                raise
         return self._runtime
-
-    def _engine_fallback_backend(self) -> str | None:
-        backend = self.config.engine_fallback_backend
-        if backend is None:
-            backend = os.environ.get("CTX_ENGINE_FALLBACK_BACKEND", "pt")
-        backend = backend.strip().lower()
-        if backend in {"", "none", "off", "disabled", "false", "0"}:
-            return None
-        return backend
 
     def _pt_model_path(self) -> Path:
         if self.config.pt_model_path is not None:

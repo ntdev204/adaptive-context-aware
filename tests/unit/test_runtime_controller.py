@@ -48,3 +48,45 @@ def test_runtime_status_requires_engine_camera_lidar_and_imu(tmp_path) -> None:
     assert status.camera_available
     assert not status.ready
     assert status.state == "stopped"
+
+
+def test_runtime_start_enters_error_when_detector_warmup_fails(monkeypatch) -> None:
+    import src.perception.pipeline as pipeline_module
+
+    controller = JetsonRuntimeController(
+        RuntimeConfig(
+            jetson_host="127.0.0.1",
+            sensor_ingest_port=0,
+            result_publish_port=0,
+            camera_source="disabled",
+        )
+    )
+
+    class FakeService:
+        def __init__(self, endpoint: str | None = None) -> None:
+            self._stats = type("Stats", (), {"messages_received": 0, "decode_errors": 0, "last_message_age_ms": None})()
+            self.config = type("Config", (), {"endpoint": endpoint or "tcp://127.0.0.1:0"})()
+
+        def start(self) -> None:
+            return None
+
+        def stop(self) -> None:
+            return None
+
+        def stats(self):
+            return self._stats
+
+    class FailingPipeline:
+        def warmup(self) -> None:
+            raise RuntimeError("bad engine")
+
+    controller._frame_source = type("FrameSource", (), {"stop": lambda self: None})()
+    controller._ingest = FakeService()
+    controller._result_publisher = FakeService("tcp://127.0.0.1:5556")
+    monkeypatch.setattr(controller, "_start_frame_source", lambda: None)
+    monkeypatch.setattr(pipeline_module, "PerceptionPipeline", FailingPipeline)
+
+    status = controller.start()
+
+    assert status.state == "error"
+    assert status.reason == "bad engine"
