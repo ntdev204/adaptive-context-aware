@@ -1,10 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
 from .depth_proc import DepthBoundingBox3D
+
+
+def _empty_contour_xy() -> np.ndarray:
+    return np.zeros((0, 2), dtype=np.float32)
+
+
+def _empty_contour_points_xyz_m() -> np.ndarray:
+    return np.zeros((0, 3), dtype=np.float32)
 
 
 @dataclass(slots=True)
@@ -16,9 +24,9 @@ class TrackState:
     age: int
     missed_frames: int
     confidence: float
-    class_id: float
-    contour_xy: np.ndarray
-    contour_points_xyz_m: np.ndarray
+    class_id: float = 0.0
+    contour_xy: np.ndarray = field(default_factory=_empty_contour_xy)
+    contour_points_xyz_m: np.ndarray = field(default_factory=_empty_contour_points_xyz_m)
 
 
 class MultiObjectTracker:

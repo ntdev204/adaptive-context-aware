@@ -936,7 +936,6 @@ def _read_optional_annotations(
     *,
     config_context: str,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
-    frame_count = len(rgb_timestamps)
     if "annotations" in handle:
         frame_values = (
             [json.loads(item) for item in handle["annotations"]["frame_annotations"].asstr()[...]]

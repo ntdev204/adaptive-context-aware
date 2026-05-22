@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -9,13 +9,18 @@ from .lidar_proc import LidarCluster
 from .tracker import TrackState
 
 
+def _empty_contour_xy() -> np.ndarray:
+    return np.zeros((0, 2), dtype=np.float32)
+
+
+def _empty_contour_points_xyz_m() -> np.ndarray:
+    return np.zeros((0, 3), dtype=np.float32)
+
+
 @dataclass(slots=True)
 class FusedEntity:
     track_id: int
-    class_id: float
     bbox_xywh: np.ndarray
-    contour_xy: np.ndarray
-    contour_points_xyz_m: np.ndarray
     position_3d: np.ndarray
     velocity_3d: np.ndarray
     heading_rad: float
@@ -23,9 +28,12 @@ class FusedEntity:
     nearest_obstacle_distance_m: float | None
     nearest_obstacle_centroid_xy: np.ndarray | None
     ego_velocity_xyz_mps: np.ndarray
-    distance_to_robot_m: float | None
-    distance_source: str | None
-    sync_confidence: float
+    class_id: float = 0.0
+    contour_xy: np.ndarray = field(default_factory=_empty_contour_xy)
+    contour_points_xyz_m: np.ndarray = field(default_factory=_empty_contour_points_xyz_m)
+    distance_to_robot_m: float | None = None
+    distance_source: str | None = None
+    sync_confidence: float = 0.0
 
 
 class SensorFusion:
