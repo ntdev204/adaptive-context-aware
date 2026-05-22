@@ -50,7 +50,6 @@ class SensorFusion:
         )
         heading_rad = float(ego_motion.heading_rad) if ego_motion is not None else 0.0
         clusters = lidar_clusters or []
-
         return [self._fuse_track(track, heading_rad, ego_velocity, clusters) for track in tracks]
 
     @staticmethod
