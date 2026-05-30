@@ -1,7 +1,8 @@
 """Export YOLO .pt models to TensorRT .engine using Ultralytics built-in export.
 
-Uses the same per-model export flow as the validated single-model script, then
-applies it to every `.pt` found under the configured model root.
+Uses the Ultralytics TensorRT export flow for every `.pt` found under the
+configured model root. Any exporter side-products are removed after each build
+so only `.engine` artifacts are retained.
 
 Usage:
     python3 scripts/export_engine.py
@@ -25,7 +26,12 @@ log = logging.getLogger("export_engine")
 DEFAULT_MODEL_ROOT = os.environ.get("CTX_PT_MODEL_ROOT", "/app/models")
 DEFAULT_OUTPUT_DIR = os.environ.get("CTX_ENGINE_ROOT", "/app/models/engines")
 DEFAULT_CODEBASE_OUTPUT_DIR = os.environ.get("CTX_CODEBASE_ENGINE_ROOT")
-DEFAULT_WORKSPACE_GB = int(os.environ.get("ENGINE_WORKSPACE_GB", "2"))
+DEFAULT_WORKSPACE_GB = int(os.environ.get("ENGINE_WORKSPACE_GB", "4"))
+DEFAULT_BATCH = int(os.environ.get("ENGINE_BATCH", "8"))
+DEFAULT_DYNAMIC = os.environ.get("ENGINE_DYNAMIC", "true").lower() in {"1", "true", "yes", "on"}
+DEFAULT_FP16 = os.environ.get("ENGINE_FP16", "true").lower() in {"1", "true", "yes", "on"}
+DEFAULT_INT8 = os.environ.get("ENGINE_INT8", "false").lower() in {"1", "true", "yes", "on"}
+DEFAULT_DATA = os.environ.get("ENGINE_DATA")
 DEFAULT_IMGSZ = [480, 640]
 
 
@@ -50,8 +56,51 @@ def main() -> None:
         "--fp16",
         dest="fp16",
         action="store_true",
-        default=True,
-        help="FP16 precision (default: True)",
+        default=DEFAULT_FP16,
+        help="FP16 precision (default: ENGINE_FP16 or true; ignored when --int8 is enabled)",
+    )
+    parser.add_argument(
+        "--no-fp16",
+        dest="fp16",
+        action="store_false",
+        help="Disable FP16 precision",
+    )
+    parser.add_argument(
+        "--int8",
+        dest="int8",
+        action="store_true",
+        default=DEFAULT_INT8,
+        help="INT8 TensorRT export (default: ENGINE_INT8 or false)",
+    )
+    parser.add_argument(
+        "--no-int8",
+        dest="int8",
+        action="store_false",
+        help="Disable INT8 TensorRT export",
+    )
+    parser.add_argument(
+        "--dynamic",
+        dest="dynamic",
+        action="store_true",
+        default=DEFAULT_DYNAMIC,
+        help="Enable dynamic TensorRT input shapes (default: ENGINE_DYNAMIC or true)",
+    )
+    parser.add_argument(
+        "--static",
+        dest="dynamic",
+        action="store_false",
+        help="Disable dynamic TensorRT input shapes",
+    )
+    parser.add_argument(
+        "--batch",
+        type=int,
+        default=DEFAULT_BATCH,
+        help="Maximum export batch size when dynamic=True (default: ENGINE_BATCH or 8)",
+    )
+    parser.add_argument(
+        "--data",
+        default=DEFAULT_DATA,
+        help="Dataset YAML for INT8 calibration (default: ENGINE_DATA)",
     )
     parser.add_argument(
         "--imgsz",
@@ -64,7 +113,7 @@ def main() -> None:
         "--workspace",
         type=int,
         default=DEFAULT_WORKSPACE_GB,
-        help="TensorRT workspace in GB (default: 2 or ENGINE_WORKSPACE_GB)",
+        help="TensorRT workspace in GB (default: 4 or ENGINE_WORKSPACE_GB)",
     )
     args = parser.parse_args()
 
@@ -103,6 +152,10 @@ def main() -> None:
             engine_path=engine_path,
             codebase_engine_path=codebase_engine_path,
             fp16=args.fp16,
+            int8=args.int8,
+            dynamic=args.dynamic,
+            batch=args.batch,
+            data=args.data,
             imgsz=imgsz,
             workspace=args.workspace,
         ):
@@ -117,6 +170,10 @@ def export_model(
     engine_path: Path,
     codebase_engine_path: Path | None = None,
     fp16: bool,
+    int8: bool,
+    dynamic: bool,
+    batch: int,
+    data: str | None,
     imgsz: list[int] | int,
     workspace: int,
 ) -> bool:
@@ -126,10 +183,14 @@ def export_model(
 
     engine_path.parent.mkdir(parents=True, exist_ok=True)
     log.info(
-        "Exporting %s -> %s  [FP16=%s, workspace=%dGB, imgsz=%s]",
+        "Exporting %s -> %s  [dynamic=%s, batch=%d, FP16=%s, INT8=%s, data=%s, workspace=%dGB, imgsz=%s]",
         pt_path,
         engine_path,
+        dynamic,
+        batch,
         fp16,
+        int8,
+        data or "-",
         workspace,
         imgsz,
     )
@@ -139,17 +200,25 @@ def export_model(
     model = YOLO(str(pt_path))
 
     log.info("Running TensorRT export (this takes 3-10 min on Jetson Orin)...")
-    exported = Path(
-        model.export(
-            format="engine",
-            device=0,
-            half=fp16,
-            imgsz=imgsz,
-            workspace=workspace,
-            simplify=False,
-            verbose=False,
-        )
-    )
+    export_kwargs = {
+        "format": "engine",
+        "device": 0,
+        "dynamic": dynamic,
+        "batch": batch,
+        "half": fp16 and not int8,
+        "int8": int8,
+        "imgsz": imgsz,
+        "workspace": workspace,
+        "simplify": False,
+        "verbose": False,
+    }
+    if data:
+        export_kwargs["data"] = data
+
+    try:
+        exported = Path(model.export(**export_kwargs))
+    finally:
+        _cleanup_intermediate_exports(pt_path)
 
     if exported.exists() and exported.resolve() != engine_path.resolve():
         exported.replace(engine_path)
@@ -163,6 +232,13 @@ def export_model(
 
     log.error("Export failed -- engine not found at %s", engine_path)
     return False
+
+
+def _cleanup_intermediate_exports(pt_path: Path) -> None:
+    for path in (pt_path.with_suffix(".onnx"),):
+        if path.exists():
+            path.unlink()
+            log.info("Removed intermediate export artifact: %s", path)
 
 
 def _iter_pt_files(model_root: Path, output_dir: Path) -> list[Path]:
