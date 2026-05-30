@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,8 @@ from src.transport.zmq_result_publisher import ZmqResultPublisher, ZmqResultPubl
 from src.transport.zmq_sensor_ingest import SensorIngestStats, ZmqIngestConfig, ZmqSensorIngest
 from src.utils.constants import FRAME_HEIGHT, FRAME_WIDTH
 from src.utils.enums import SafetyState
+
+log = logging.getLogger(__name__)
 
 
 class RuntimeState(StrEnum):
@@ -89,7 +92,7 @@ class JetsonRuntimeController:
         self._reason: str | None = None
         self._camera = AstraSCameraRuntime(
             AstraSCameraConfig(
-                backend=os.environ.get("CTX_CAMERA_BACKEND", "v4l2"),
+                backend=os.environ.get("CTX_CAMERA_BACKEND", "openni"),
                 rgb_device=self.config.camera_rgb_device,
                 depth_device=self.config.camera_depth_device,
                 width=self.config.camera_width,
@@ -113,18 +116,30 @@ class JetsonRuntimeController:
         self._frame_source: LocalCameraFrameSource | ZmqJpegFrameReceiver | None = self._make_frame_source()
         self._perception_loop: RuntimePerceptionLoop | None = None
         self._heartbeat_client: HeartbeatClientDaemon | None = None
+        self._last_logged_status_key: tuple[object, ...] | None = None
 
     def start(self) -> RuntimeStatus:
         if self._state is RuntimeState.RUNNING:
             return self.status()
         self._state = RuntimeState.STARTING
+        log.info(
+            "runtime starting backend=%s camera_source=%s camera_backend=%s engine=%s pt=%s",
+            self.config.runtime_backend,
+            self.config.camera_source,
+            os.environ.get("CTX_CAMERA_BACKEND", "openni"),
+            self.config.engine_path,
+            self.config.pt_model_path,
+        )
         try:
+            log.info("starting sensor ingest endpoint=tcp://%s:%s", self._bind_host(), self.config.sensor_ingest_port)
             self._ingest.start()
+            log.info("starting result publisher endpoint=%s", self._result_publisher.config.endpoint)
             self._result_publisher.start()
             self._start_frame_source()
             self._start_perception_loop()
             self._start_heartbeat()
         except Exception as exc:
+            log.exception("runtime startup failed")
             self._stop_perception_loop()
             self._stop_frame_source()
             self._ingest.stop()
@@ -135,9 +150,18 @@ class JetsonRuntimeController:
             return self.status()
         self._state = RuntimeState.RUNNING
         self._reason = None
-        return self.status()
+        status = self.status()
+        log.info(
+            "runtime started ready=%s reason=%s result_endpoint=%s heartbeat_endpoint=%s",
+            status.ready,
+            status.reason,
+            status.result_endpoint,
+            status.heartbeat_endpoint,
+        )
+        return status
 
     def stop(self) -> RuntimeStatus:
+        log.info("runtime stopping")
         self._stop_perception_loop()
         self._stop_frame_source()
         self._stop_heartbeat()
@@ -178,7 +202,7 @@ class JetsonRuntimeController:
                 reason = "imu stream is stale"
             else:
                 reason = None
-        return RuntimeStatus(
+        status = RuntimeStatus(
             state=self._state,
             ready=ready,
             reason=reason,
@@ -192,6 +216,8 @@ class JetsonRuntimeController:
             result_endpoint=self._result_publisher.config.endpoint,
             heartbeat_endpoint=f"tcp://{self.config.pi_host}:{self.config.heartbeat_port}",
         )
+        self._log_status_change(status)
+        return status
 
     def _camera_available(self) -> bool:
         if self.config.camera_source == "scada_zmq":
@@ -230,8 +256,8 @@ class JetsonRuntimeController:
                 stats = self._frame_source.stats()
                 if stats.last_error:
                     return stats.last_error
-            return "waiting for local Jetson camera frames"
-        return "waiting for AstraS RGB-D camera devices"
+            return "waiting for Astra S OpenNI camera frames"
+        return "waiting for Astra S OpenNI camera device"
 
     def _inference_artifact_available(self) -> bool:
         if self.config.runtime_backend == "pt":
@@ -266,20 +292,26 @@ class JetsonRuntimeController:
 
     def _start_frame_source(self) -> None:
         if self._frame_source is not None:
+            log.info("starting frame source endpoint=%s", self._frame_source.config.endpoint)
             self._frame_source.start()
 
     def _stop_frame_source(self) -> None:
         if self._frame_source is not None:
+            log.info("stopping frame source endpoint=%s", self._frame_source.config.endpoint)
             self._frame_source.stop()
 
     def _start_perception_loop(self) -> None:
         if not self.config.perception_enabled or self._perception_loop is not None:
+            if not self.config.perception_enabled:
+                log.warning("perception loop disabled by CTX_PERCEPTION_ENABLED")
             return
         if self._frame_source is None:
+            log.warning("perception loop not started because frame source is not configured")
             return
 
         from src.perception.pipeline import PerceptionPipeline
 
+        log.info("starting perception loop interval_ms=%s", self.config.perception_interval_ms)
         self._perception_loop = RuntimePerceptionLoop(
             pipeline=PerceptionPipeline(),
             sensor_store=self.sensor_store,
@@ -295,12 +327,14 @@ class JetsonRuntimeController:
     def _stop_perception_loop(self) -> None:
         if self._perception_loop is None:
             return
+        log.info("stopping perception loop")
         self._perception_loop.stop()
         self._perception_loop = None
 
     def _start_heartbeat(self) -> None:
         if self._heartbeat_client is not None:
             return
+        log.info("starting heartbeat client endpoint=tcp://%s:%s", self.config.pi_host, self.config.heartbeat_port)
         self._heartbeat_client = HeartbeatClientDaemon(
             host=self.config.pi_host,
             port=self.config.heartbeat_port,
@@ -313,6 +347,7 @@ class JetsonRuntimeController:
     def _stop_heartbeat(self) -> None:
         if self._heartbeat_client is None:
             return
+        log.info("stopping heartbeat client endpoint=tcp://%s:%s", self.config.pi_host, self.config.heartbeat_port)
         self._heartbeat_client.stop()
         self._heartbeat_client = None
 
@@ -324,6 +359,39 @@ class JetsonRuntimeController:
             "pipeline_fps": 0.0,
             "gpu_temp_c": 0,
         }
+
+    def _log_status_change(self, status: RuntimeStatus) -> None:
+        key = (
+            status.state,
+            status.ready,
+            status.reason,
+            status.engine_available,
+            status.camera_available,
+            status.ingest.running,
+            status.perception_running,
+        )
+        if key == self._last_logged_status_key:
+            return
+        self._last_logged_status_key = key
+        message = (
+            "runtime status state=%s ready=%s reason=%s engine_available=%s camera_available=%s "
+            "ingest_running=%s perception_running=%s frames_processed=%s messages_received=%s"
+        )
+        args = (
+            status.state.value,
+            status.ready,
+            status.reason,
+            status.engine_available,
+            status.camera_available,
+            status.ingest.running,
+            status.perception_running,
+            status.frames_processed,
+            status.ingest.messages_received,
+        )
+        if status.ready:
+            log.info(message, *args)
+        else:
+            log.warning(message, *args)
 
 
 def _is_stale(age_ms: float | None, max_age_ms: int) -> bool:

@@ -9,7 +9,11 @@ make export-engine
 make compose-up
 ```
 
-`make export-engine` reuses `context-aware:jetson-dev`; there is no separate export-only image anymore.
+`make export-engine` reuses `context-aware:jetson-dev`; there is no separate export-only image anymore. Exported `.engine` files are copied back to the codebase under `models/engines/`, not left only inside the Docker container.
+If the TensorRT engine is missing, the container still boots in degraded mode so camera and sensor diagnostics are available; `/metrics` reports `ready=false` with `reason="waiting for inference engine"`. Set `CTX_REQUIRE_ENGINE_AT_BOOT=true` to restore fail-fast startup.
+Camera backend defaults to `CTX_CAMERA_BACKEND=openni` for the Astra S. The runtime opens the camera through OpenNI only; it does not fall back to V4L2, so `/metrics.reason` reports the real Astra/OpenNI failure if the camera is not available.
+`make compose-logs` includes startup diagnostics for engine path/size, model path/size, free disk, USB/OpenNI visibility, runtime readiness transitions, camera source errors, and perception-loop exceptions. Set `CTX_LOG_LEVEL=DEBUG` before `make compose-up` for more verbose Python logs.
+`make docker-build-dev` and `make docker-build-prod` also build the `mlflow` stage in `docker/Dockerfile.jetson` (`context-aware:mlflow`), so MLflow dependencies are installed during the build step, not every time the service starts.
 
 `make compose-up` on Jetson starts:
 

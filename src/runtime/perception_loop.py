@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from dataclasses import dataclass
@@ -16,6 +17,8 @@ from src.transport.results import (
     RuntimeMetricsMessage,
     TrackedEntityMessage,
 )
+
+log = logging.getLogger(__name__)
 
 
 class FrameSource(Protocol):
@@ -84,15 +87,18 @@ class RuntimePerceptionLoop:
         self._last_error: str | None = None
         self._last_frame_sequence: int | None = None
         self._last_frame_timestamp_us: int | None = None
+        self._last_error_logged_monotonic = 0.0
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
             return
         self._stop_event.clear()
+        log.info("starting runtime perception loop interval_ms=%s", self.config.interval_ms)
         self._thread = threading.Thread(target=self._run, name="adaptive-perception-loop", daemon=True)
         self._thread.start()
 
     def stop(self, timeout_s: float = 1.0) -> None:
+        log.info("stopping runtime perception loop frames_processed=%s", self._frames_processed)
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=timeout_s)
@@ -140,6 +146,8 @@ class RuntimePerceptionLoop:
         with self._lock:
             self._frames_processed += 1
             self._last_result_monotonic = time.monotonic()
+            if self._last_error is not None:
+                log.info("perception loop recovered after error: %s", self._last_error)
             self._last_error = None
         return message
 
@@ -156,6 +164,7 @@ class RuntimePerceptionLoop:
                 with self._lock:
                     self._publish_errors += 1
                     self._last_error = str(exc)
+                self._log_runtime_error(exc)
                 time.sleep(interval_s)
 
     def _delta_time_s(self, frame: CameraFrame) -> float:
@@ -163,6 +172,13 @@ class RuntimePerceptionLoop:
             return max(self.config.interval_ms / 1000.0, 1e-3)
         delta_us = frame.timestamp_us - self._last_frame_timestamp_us
         return max(delta_us / 1_000_000.0, 1e-3)
+
+    def _log_runtime_error(self, exc: Exception) -> None:
+        now = time.monotonic()
+        if now - self._last_error_logged_monotonic < 5.0:
+            return
+        self._last_error_logged_monotonic = now
+        log.exception("perception loop failed to process frame: %s", exc)
 
 
 def decode_jpeg_frame(payload: bytes) -> np.ndarray:

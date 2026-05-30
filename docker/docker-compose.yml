@@ -2,11 +2,13 @@ name: adaptive-context-aware
 
 x-adaptive-env: &adaptive-env
   CTX_BIND_HOST: ${CTX_BIND_HOST:-0.0.0.0}
+  CTX_LOG_LEVEL: ${CTX_LOG_LEVEL:-INFO}
   CTX_CAMERA_BACKEND: ${CTX_CAMERA_BACKEND:-openni}
   CTX_CAMERA_SOURCE: ${CTX_CAMERA_SOURCE:-device}
   CTX_ASTRAS_DEPTH_DEVICE: ${CTX_ASTRAS_DEPTH_DEVICE:-/dev/video1}
   CTX_ASTRAS_RGB_DEVICE: ${CTX_ASTRAS_RGB_DEVICE:-/dev/video0}
   CTX_RUNTIME_BACKEND: ${CTX_RUNTIME_BACKEND:-engine}
+  CTX_REQUIRE_ENGINE_AT_BOOT: ${CTX_REQUIRE_ENGINE_AT_BOOT:-false}
   CTX_AUTOSTART: ${CTX_AUTOSTART:-true}
   CTX_JETSON_HOST: ${CTX_JETSON_HOST:-25.12.4.100}
   CTX_PI_HOST: ${CTX_PI_HOST:-25.12.4.101}
@@ -70,7 +72,11 @@ services:
     memswap_limit: 4g
 
   mlflow:
-    image: python:3.10-slim
+    image: context-aware:mlflow
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.jetson
+      target: mlflow
     profiles: ["mlops"]
     working_dir: /srv/mlflow
     environment:
@@ -92,15 +98,16 @@ services:
       retries: 3
       start_period: 60s
     command:
-      - sh
-      - -lc
-      - >
-        pip install --no-cache-dir mlflow &&
-        mlflow server
-        --backend-store-uri "$${MLFLOW_BACKEND_URI}"
-        --default-artifact-root "$${MLFLOW_ARTIFACT_ROOT}"
-        --host "$${MLFLOW_HOST}"
-        --port "$${MLFLOW_PORT}"
+      - mlflow
+      - server
+      - --backend-store-uri
+      - ${MLFLOW_BACKEND_URI:-sqlite:////srv/mlflow/state/mlflow.db}
+      - --default-artifact-root
+      - ${MLFLOW_ARTIFACT_ROOT:-/srv/mlflow/artifacts}
+      - --host
+      - ${MLFLOW_HOST:-0.0.0.0}
+      - --port
+      - ${MLFLOW_PORT:-5000}
 
   jetson-dev:
     profiles: ["jetson-dev"]
