@@ -47,7 +47,10 @@ def ensure_engine(
     from ultralytics import YOLO
 
     model = YOLO(str(model_path))
-    exported = Path(model.export(format="engine", imgsz=image_size, half=True))
+    try:
+        exported = Path(model.export(format="engine", imgsz=image_size, half=True))
+    finally:
+        _cleanup_intermediate_exports(model_path)
     exported.replace(engine_path)
     engine_sha = sha256_file(engine_path)
 
@@ -76,6 +79,12 @@ def _copy_artifact(source: Path, destination: Path) -> None:
     if source.resolve() == destination.resolve():
         return
     shutil.copy2(source, destination)
+
+
+def _cleanup_intermediate_exports(model_path: Path) -> None:
+    onnx_path = model_path.with_suffix(".onnx")
+    if onnx_path.exists():
+        onnx_path.unlink()
 
 
 def main() -> int:

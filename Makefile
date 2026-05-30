@@ -5,6 +5,12 @@ DOCKER ?= docker
 COMPOSE ?= $(DOCKER) compose -f docker/docker-compose.yml
 CODEBASE_ENGINE_DIR ?= $(CURDIR)/models/engines
 CONTAINER_CODEBASE_ENGINE_DIR ?= /workspace/models/engines
+ENGINE_DYNAMIC ?= true
+ENGINE_BATCH ?= 8
+ENGINE_WORKSPACE_GB ?= 4
+ENGINE_FP16 ?= true
+ENGINE_INT8 ?= false
+ENGINE_DATA ?=
 
 .PHONY: help install install-dev test test-unit lint fixtures fixtures-download benchmark-ci benchmark-laptop benchmark-jetson baseline-update \
 	build-dev build-prod export-engine up down logs config \
@@ -93,7 +99,14 @@ export-engine:
 	$(PYTHON) -c "from pathlib import Path; Path('models/engines').mkdir(parents=True, exist_ok=True)"
 	$(DOCKER) run --rm --gpus all \
 		-v "$(CURDIR)/models:/app/models" \
+		-v "$(CURDIR)/data:/app/data:ro" \
 		-v "$(CODEBASE_ENGINE_DIR):$(CONTAINER_CODEBASE_ENGINE_DIR)" \
+		-e ENGINE_DYNAMIC="$(ENGINE_DYNAMIC)" \
+		-e ENGINE_BATCH="$(ENGINE_BATCH)" \
+		-e ENGINE_WORKSPACE_GB="$(ENGINE_WORKSPACE_GB)" \
+		-e ENGINE_FP16="$(ENGINE_FP16)" \
+		-e ENGINE_INT8="$(ENGINE_INT8)" \
+		-e ENGINE_DATA="$(ENGINE_DATA)" \
 		context-aware:jetson-dev python3 scripts/export_engine.py \
 			--root /app/models \
 			--output-dir /app/models/engines \
