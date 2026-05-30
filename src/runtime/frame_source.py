@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -7,6 +8,8 @@ from dataclasses import dataclass
 
 import numpy as np
 import zmq
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +44,7 @@ class LocalCameraFrameConfig:
     publish_port: int = 5557
     publish_enabled: bool = True
     jpeg_quality: int = 80
+    error_log_interval_s: float = 5.0
 
     @property
     def endpoint(self) -> str:
@@ -147,11 +151,23 @@ class LocalCameraFrameSource:
         self._oni_device = None
         self._oni_depth_stream = None
         self._oni_color_stream = None
+        self._active_backend: str | None = None
+        self._last_error_logged_monotonic = 0.0
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
             return
         self._stop_event.clear()
+        log.info(
+            "starting local camera source backend=%s rgb_device=%s resolution=%sx%s fps=%s publish=%s endpoint=%s",
+            self.config.backend,
+            self.config.rgb_device,
+            self.config.width,
+            self.config.height,
+            self.config.fps,
+            self.config.publish_enabled,
+            self.config.endpoint,
+        )
         if self.config.publish_enabled:
             self._publisher = self._context.socket(zmq.PUB)
             self._publisher.setsockopt(zmq.SNDHWM, 2)
@@ -161,6 +177,7 @@ class LocalCameraFrameSource:
         self._thread.start()
 
     def stop(self, timeout_s: float = 1.0) -> None:
+        log.info("stopping local camera source endpoint=%s", self.config.endpoint)
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=timeout_s)
@@ -191,20 +208,19 @@ class LocalCameraFrameSource:
 
         try:
             self._open_camera(cv2)
+            log.info("local camera opened backend=%s endpoint=%s", self._active_backend, self.config.endpoint)
             encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), int(self.config.jpeg_quality)]
             interval_s = max(self.config.read_interval_ms, 1) / 1000.0
             while not self._stop_event.is_set():
                 ok, frame = self._read_frame(cv2)
                 if not ok or frame is None:
-                    with self._lock:
-                        self._last_error = f"camera read failed backend={self.config.backend}"
+                    self._record_error(f"camera read failed backend={self._active_backend or self.config.backend}")
                     time.sleep(interval_s)
                     continue
 
                 ok, encoded = cv2.imencode(".jpg", frame, encode_params)
                 if not ok:
-                    with self._lock:
-                        self._last_error = "failed to encode camera frame as JPEG"
+                    self._record_error("failed to encode camera frame as JPEG")
                     time.sleep(interval_s)
                     continue
 
@@ -219,22 +235,27 @@ class LocalCameraFrameSource:
                         received_monotonic=now,
                     )
                     self._latest = camera_frame
-                    self._last_error = None
+                    if self._last_error is not None:
+                        log.info("local camera recovered after error: %s", self._last_error)
+                        self._last_error = None
 
                 if self._publisher is not None:
                     self._publisher.send(payload)
-                time.sleep(interval_s)
+                # No sleep here — camera driver/read_frame() already rate-limits to camera FPS
         except Exception as exc:
-            with self._lock:
-                self._last_error = str(exc)
+            self._record_error(str(exc), exc_info=True)
         finally:
+            log.info("local camera source stopped backend=%s frames=%s", self._active_backend, self._frames_received)
             self._close_camera()
 
     def _open_camera(self, cv2) -> None:
-        if self.config.backend == "openni":
+        backend = self.config.backend.strip().lower()
+        if backend == "openni":
             self._open_openni_camera()
+            self._active_backend = "openni"
             return
         self._capture = self._open_cv_capture(cv2)
+        self._active_backend = backend
 
     def _open_openni_camera(self) -> None:
         try:
@@ -244,13 +265,18 @@ class LocalCameraFrameSource:
 
         self._openni2 = openni2
         init_errors: list[str] = []
+        log.info(
+            "opening Astra S through OpenNI candidates=%s",
+            ", ".join(str(value) for value in _openni_redist_candidates()),
+        )
         for redist in _openni_redist_candidates():
             try:
                 self._openni2.initialize(redist)
                 self._oni_device = self._openni2.Device.open_any()
+                log.info("OpenNI initialized redist=%s", redist or "<default>")
                 break
             except Exception as exc:
-                init_errors.append(f"{redist or '<default>'}: {type(exc).__name__}")
+                init_errors.append(f"{redist or '<default>'}: {type(exc).__name__}: {exc}")
                 try:
                     self._openni2.unload()
                 except Exception:
@@ -285,7 +311,12 @@ class LocalCameraFrameSource:
             pass
 
     def _open_cv_capture(self, cv2):
-        capture = cv2.VideoCapture(self.config.rgb_device or "/dev/video0")
+        backend = self.config.backend.strip().lower()
+        api_preference = getattr(cv2, "CAP_V4L2", None) if backend == "v4l2" else None
+        if api_preference is None:
+            capture = cv2.VideoCapture(self.config.rgb_device or "/dev/video0")
+        else:
+            capture = cv2.VideoCapture(self.config.rgb_device or "/dev/video0", api_preference)
         capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.config.width)
         capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config.height)
         capture.set(cv2.CAP_PROP_FPS, self.config.fps)
@@ -295,7 +326,7 @@ class LocalCameraFrameSource:
         return capture
 
     def _read_frame(self, cv2):
-        if self.config.backend == "openni":
+        if self._active_backend == "openni":
             if self._oni_color_stream is None:
                 return False, None
             try:
@@ -329,6 +360,16 @@ class LocalCameraFrameSource:
         if self._capture is not None:
             self._capture.release()
             self._capture = None
+        self._active_backend = None
+
+    def _record_error(self, message: str, *, exc_info: bool = False) -> None:
+        with self._lock:
+            self._last_error = message
+        now = time.monotonic()
+        if now - self._last_error_logged_monotonic < self.config.error_log_interval_s:
+            return
+        self._last_error_logged_monotonic = now
+        log.error("local camera error: %s", message, exc_info=exc_info)
 
 
 def _looks_like_jpeg(payload: bytes) -> bool:
