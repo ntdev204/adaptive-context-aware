@@ -3,6 +3,8 @@ PIP ?= $(PYTHON) -m pip
 PYTEST ?= $(PYTHON) -m pytest
 DOCKER ?= docker
 COMPOSE ?= $(DOCKER) compose -f docker/docker-compose.yml
+CODEBASE_ENGINE_DIR ?= $(CURDIR)/models/engines
+CONTAINER_CODEBASE_ENGINE_DIR ?= /workspace/models/engines
 
 .PHONY: help install install-dev test test-unit lint fixtures fixtures-download benchmark-ci benchmark-laptop benchmark-jetson baseline-update \
 	build-dev build-prod export-engine up down logs config \
@@ -20,8 +22,8 @@ help:
 	@echo "  benchmark-ci       Run CI benchmark baseline comparison"
 	@echo "  benchmark-laptop   Run laptop benchmark flow"
 	@echo "  baseline-update    Refresh CI baselines"
-	@echo "  docker-build-dev   Build Jetson-native development image (Dockerfile.jetson)"
-	@echo "  docker-build-prod  Build Jetson-native production image (Dockerfile.jetson)"
+	@echo "  docker-build-dev   Build dev runtime image and MLflow image"
+	@echo "  docker-build-prod  Build prod runtime image and MLflow image"
 	@echo "  export-engine      Export all .pt models under models/ → TensorRT .engine using context-aware:jetson-dev"
 	@echo "  compose-up         Start Jetson adaptive runtime only"
 	@echo "  compose-down       Stop stack"
@@ -35,7 +37,7 @@ help:
 	@echo "  down               Alias: compose-down"
 	@echo "  logs               Alias: compose-logs"
 	@echo "  config             Alias: compose-config"
-	@echo "  build-engine       Alias: docker-build-dev"
+	@echo "  build-engine       Build dev image and export .engine artifacts into models/engines"
 	@echo "  run                Run application entrypoint locally"
 
 install:
@@ -72,9 +74,11 @@ baseline-update:
 
 docker-build-dev:
 	$(DOCKER) build -f docker/Dockerfile.jetson --target jetson-dev -t context-aware:jetson-dev .
+	$(DOCKER) build -f docker/Dockerfile.jetson --target mlflow -t context-aware:mlflow .
 
 docker-build-prod:
 	$(DOCKER) build -f docker/Dockerfile.jetson --target jetson-prod -t context-aware:jetson-prod .
+	$(DOCKER) build -f docker/Dockerfile.jetson --target mlflow -t context-aware:mlflow .
 
 build-dev: docker-build-dev
 	$(COMPOSE) build jetson-dev
@@ -82,13 +86,18 @@ build-dev: docker-build-dev
 build-prod: docker-build-prod
 	$(COMPOSE) build jetson-prod
 
-build-engine: docker-build-dev
+build-engine: docker-build-dev export-engine
 
 export-engine:
 	@$(DOCKER) image inspect context-aware:jetson-dev > /dev/null 2>&1 || (echo "context-aware:jetson-dev not found; run 'make docker-build-dev' first." >&2; exit 1)
+	$(PYTHON) -c "from pathlib import Path; Path('models/engines').mkdir(parents=True, exist_ok=True)"
 	$(DOCKER) run --rm --gpus all \
 		-v "$(CURDIR)/models:/app/models" \
-		context-aware:jetson-dev python3 scripts/export_engine.py --root /app/models --output-dir /app/models/engines
+		-v "$(CODEBASE_ENGINE_DIR):$(CONTAINER_CODEBASE_ENGINE_DIR)" \
+		context-aware:jetson-dev python3 scripts/export_engine.py \
+			--root /app/models \
+			--output-dir /app/models/engines \
+			--codebase-output-dir $(CONTAINER_CODEBASE_ENGINE_DIR)
 
 compose-config:
 	$(COMPOSE) config

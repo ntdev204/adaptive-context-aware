@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -8,6 +9,18 @@ from fastapi import FastAPI
 from src.runtime.controller import JetsonRuntimeController, RuntimeConfig, RuntimeStatus
 
 from .schemas import HealthResponse, RuntimeConfigResponse, RuntimeControlResponse, RuntimeMetricsResponse
+
+LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+
+
+def _configure_logging() -> None:
+    level_name = os.environ.get("CTX_LOG_LEVEL", "INFO").strip().upper()
+    level = getattr(logging, level_name, logging.INFO)
+    logging.basicConfig(level=level, format=LOG_FORMAT)
+    logging.getLogger("src").setLevel(level)
+
+
+_configure_logging()
 
 
 def create_app(controller: JetsonRuntimeController | None = None) -> FastAPI:

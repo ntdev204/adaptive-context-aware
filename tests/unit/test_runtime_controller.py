@@ -6,7 +6,8 @@ from src.runtime.controller import JetsonRuntimeController, RuntimeConfig
 from src.transport.messages import ImuSampleMessage, LidarScanMessage
 
 
-def test_runtime_status_requires_engine_camera_lidar_and_imu(tmp_path) -> None:
+def test_runtime_status_requires_engine_camera_lidar_and_imu(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("CTX_CAMERA_BACKEND", "v4l2")
     engine_path = tmp_path / "yolov8s.engine"
     rgb_device = tmp_path / "astras-rgb"
     depth_device = tmp_path / "astras-depth"
