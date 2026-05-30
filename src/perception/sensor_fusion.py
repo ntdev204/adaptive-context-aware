@@ -37,20 +37,24 @@ class SensorFusion:
         heading_rad = float(ego_motion.heading_rad) if ego_motion is not None else 0.0
         clusters = lidar_clusters or []
 
-        return [
-            FusedEntity(
-                track_id=track.track_id,
-                bbox_xywh=track.bbox_xywh.copy(),
-                position_3d=track.position_3d.copy(),
-                velocity_3d=track.velocity_3d.copy(),
-                heading_rad=heading_rad,
-                confidence=track.confidence,
-                nearest_obstacle_distance_m=_nearest_cluster(track, clusters)[0],
-                nearest_obstacle_centroid_xy=_nearest_cluster(track, clusters)[1],
-                ego_velocity_xyz_mps=ego_velocity.copy(),
+        fused: list[FusedEntity] = []
+        for track in tracks:
+            # Compute once — avoids calling _nearest_cluster twice per entity
+            nearest_dist, nearest_centroid = _nearest_cluster(track, clusters)
+            fused.append(
+                FusedEntity(
+                    track_id=track.track_id,
+                    bbox_xywh=track.bbox_xywh.copy(),
+                    position_3d=track.position_3d.copy(),
+                    velocity_3d=track.velocity_3d.copy(),
+                    heading_rad=heading_rad,
+                    confidence=track.confidence,
+                    nearest_obstacle_distance_m=nearest_dist,
+                    nearest_obstacle_centroid_xy=nearest_centroid,
+                    ego_velocity_xyz_mps=ego_velocity.copy(),
+                )
             )
-            for track in tracks
-        ]
+        return fused
 
 
 def _nearest_cluster(track: TrackState, lidar_clusters: list[LidarCluster]) -> tuple[float | None, np.ndarray | None]:

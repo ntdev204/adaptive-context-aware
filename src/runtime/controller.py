@@ -43,7 +43,7 @@ class RuntimeConfig:
     pi_host: str = "25.12.4.101"
     runtime_backend: str = "engine"
     perception_enabled: bool = True
-    perception_interval_ms: int = 100
+    perception_interval_ms: int = 33  # ~30 FPS (was 100ms = max 10 FPS)
     result_source_id: str = "adaptive-runtime"
     sensor_ingest_port: int = 5555
     result_publish_port: int = 5556
@@ -62,6 +62,15 @@ class RuntimeConfig:
     camera_height: int = FRAME_HEIGHT
     camera_fps: int = 30
     camera_publish_port: int = 5557
+    detect_every_n: int = 3
+    """Run full detector every N frames; tracker propagates bboxes on skip frames.
+    Default 3 reduces avg detector latency by ~3x (e.g. 85ms → ~29ms avg).
+    Set to 1 to detect every frame (maximum accuracy, highest latency).
+    """
+    detector_input_scale: float = 1.0
+    """Downscale factor for detector input frame (e.g. 0.5 = 320x240 from 640x480).
+    Set to 0.5 for additional ~2-4x inference speedup on GPU/TRT.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -313,7 +322,10 @@ class JetsonRuntimeController:
 
         log.info("starting perception loop interval_ms=%s", self.config.perception_interval_ms)
         self._perception_loop = RuntimePerceptionLoop(
-            pipeline=PerceptionPipeline(),
+            pipeline=PerceptionPipeline(
+                detector=_make_detector(self.config),
+                detect_every_n=self.config.detect_every_n,
+            ),
             sensor_store=self.sensor_store,
             frame_source=self._frame_source,
             result_publisher=self._result_publisher,
@@ -403,3 +415,17 @@ def _env_bool(name: str, default: bool) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _make_detector(config: RuntimeConfig):
+    """Build a :class:`PersonDetector` wired to the given runtime config."""
+    from src.perception.detector import DetectorConfig, PersonDetector
+
+    return PersonDetector(
+        DetectorConfig(
+            backend=config.runtime_backend,
+            engine_path=Path(config.engine_path),
+            pt_model_path=Path(config.pt_model_path),
+            input_scale=config.detector_input_scale,
+        )
+    )

@@ -30,33 +30,26 @@ class LidarProcessor:
             return []
 
         xy_points = self._polar_to_cartesian(points)
-        clusters: list[np.ndarray] = []
-        current_indices = [0]
 
-        for idx in range(1, len(points)):
-            prev_point = xy_points[idx - 1]
-            point = xy_points[idx]
-            jump = float(np.linalg.norm(point - prev_point))
-            if jump <= self.distance_jump_threshold_m:
-                current_indices.append(idx)
-            else:
-                clusters.append(xy_points[current_indices])
-                current_indices = [idx]
-        clusters.append(xy_points[current_indices])
+        # Vectorized jump detection — replaces Python loop over individual points
+        diffs = xy_points[1:] - xy_points[:-1]  # (N-1, 2)
+        jumps = np.linalg.norm(diffs, axis=1)  # (N-1,)
+        split_indices = np.flatnonzero(jumps > self.distance_jump_threshold_m) + 1
+
+        raw_clusters = np.split(xy_points, split_indices)
 
         results: list[LidarCluster] = []
-        for cluster in clusters:
+        for cluster in raw_clusters:
             if cluster.shape[0] < self.min_points_per_cluster:
                 continue
-            centroid = np.mean(cluster, axis=0)
-            radius = float(np.max(np.linalg.norm(cluster - centroid, axis=1)))
-            mean_range = float(np.mean(np.linalg.norm(cluster, axis=1)))
+            centroid = cluster.mean(axis=0)
+            dists = np.linalg.norm(cluster - centroid, axis=1)
             results.append(
                 LidarCluster(
                     points_xy=cluster,
                     centroid_xy=centroid,
-                    mean_range_m=mean_range,
-                    radius_m=radius,
+                    mean_range_m=float(np.linalg.norm(cluster, axis=1).mean()),
+                    radius_m=float(dists.max()),
                 )
             )
         return results

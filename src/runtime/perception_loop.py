@@ -22,8 +22,7 @@ log = logging.getLogger(__name__)
 
 
 class FrameSource(Protocol):
-    def latest(self) -> CameraFrame | None:
-        ...
+    def latest(self) -> CameraFrame | None: ...
 
 
 class PerceptionPipeline(Protocol):
@@ -37,19 +36,17 @@ class PerceptionPipeline(Protocol):
         timestamp_us: int = 0,
         frame_id: int | None = None,
         delta_time_s: float = 0.1,
-    ) -> tuple[list[FusedEntity], dict[str, float]]:
-        ...
+    ) -> tuple[list[FusedEntity], dict[str, float]]: ...
 
 
 class ResultPublisher(Protocol):
-    def publish(self, message: PerceptionResultMessage) -> None:
-        ...
+    def publish(self, message: PerceptionResultMessage) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
 class PerceptionLoopConfig:
     source_id: str = "adaptive-runtime"
-    interval_ms: int = 100
+    interval_ms: int = 33  # ~30 FPS poll rate (was 100ms = max 10 FPS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,7 +149,7 @@ class RuntimePerceptionLoop:
         return message
 
     def _run(self) -> None:
-        interval_s = max(self.config.interval_ms, 10) / 1000.0
+        interval_s = max(self.config.interval_ms, 5) / 1000.0
         while not self._stop_event.is_set():
             frame = self.frame_source.latest()
             if frame is None or frame.sequence == self._last_frame_sequence:
@@ -165,7 +162,7 @@ class RuntimePerceptionLoop:
                     self._publish_errors += 1
                     self._last_error = str(exc)
                 self._log_runtime_error(exc)
-                time.sleep(interval_s)
+                time.sleep(0.005)
 
     def _delta_time_s(self, frame: CameraFrame) -> float:
         if self._last_frame_timestamp_us is None:
@@ -202,7 +199,9 @@ def build_result_message(
     total_ms = float(timings.get("total_ms", 0.0))
     if total_ms <= 0.0:
         total_ms = sum(float(value) for value in timings.values())
-    fps = 1000.0 / total_ms if total_ms > 0.0 else 0.0
+    # FPS reflects pipeline throughput — exclude camera_ms (I/O, not compute)
+    pipeline_ms = total_ms - float(timings.get("camera_ms", 0.0))
+    fps = 1000.0 / pipeline_ms if pipeline_ms > 0.0 else 0.0
     return PerceptionResultMessage(
         source_id=source_id,
         sequence=sequence,

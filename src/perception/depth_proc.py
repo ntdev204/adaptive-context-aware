@@ -39,24 +39,24 @@ class DepthProcessor:
         self._validate_depth_map(depth_map_m)
         self._validate_detections(detections)
 
+        if detections.shape[0] == 0:
+            return []
+
         results: list[DepthBoundingBox3D] = []
+        fx, fy, cx, cy = self.intrinsics.fx, self.intrinsics.fy, self.intrinsics.cx, self.intrinsics.cy
         for x, y, w, h, conf, cls in detections:
             depth_value = self._roi_depth(depth_map_m, x, y, w, h)
             if depth_value is None:
                 continue
-            center_x = float(x + w / 2.0)
-            center_y = float(y + h / 2.0)
-            x_m = (center_x - self.intrinsics.cx) * depth_value / self.intrinsics.fx
-            y_m = (center_y - self.intrinsics.cy) * depth_value / self.intrinsics.fy
-            width_m = float(w) * depth_value / self.intrinsics.fx
-            height_m = float(h) * depth_value / self.intrinsics.fy
+            center_x = x + w * 0.5
+            center_y = y + h * 0.5
             results.append(
                 DepthBoundingBox3D(
-                    x_m=x_m,
-                    y_m=y_m,
+                    x_m=(center_x - cx) * depth_value / fx,
+                    y_m=(center_y - cy) * depth_value / fy,
                     z_m=depth_value,
-                    width_m=width_m,
-                    height_m=height_m,
+                    width_m=w * depth_value / fx,
+                    height_m=h * depth_value / fy,
                     confidence=float(conf),
                     class_id=float(cls),
                 )
