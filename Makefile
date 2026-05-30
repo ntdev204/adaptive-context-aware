@@ -31,8 +31,8 @@ help:
 	@echo "  docker-build-dev   Build dev runtime image and MLflow image"
 	@echo "  docker-build-prod  Build prod runtime image and MLflow image"
 	@echo "  export-engine      Export all .pt models under models/ → TensorRT .engine using context-aware:jetson-dev"
-	@echo "  compose-up         Start Jetson adaptive runtime only"
-	@echo "  compose-down       Stop stack"
+	@echo "  compose-up         Start Jetson adaptive runtime and MLflow"
+	@echo "  compose-down       Stop Jetson adaptive runtime and MLflow"
 	@echo "  compose-logs       Follow Jetson adaptive runtime logs"
 	@echo "  compose-config     Validate docker compose config"
 	@echo "  build-dev          Build adaptive-context-aware development services"
@@ -119,7 +119,7 @@ compose-up:
 	$(COMPOSE) --profile mlops up -d jetson-prod mlflow
 
 compose-down:
-	$(COMPOSE) down
+	$(COMPOSE) --profile mlops down
 
 compose-logs:
 	$(COMPOSE) logs -f jetson-prod mlflow
