@@ -1,4 +1,4 @@
-ARG L4T_TAG=r36.4.0
+ARG L4T_TAG=r36.4.4
 
 FROM python:3.10-slim AS mlflow
 
