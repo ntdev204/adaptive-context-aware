@@ -32,7 +32,7 @@ DEFAULT_DYNAMIC = os.environ.get("ENGINE_DYNAMIC", "true").lower() in {"1", "tru
 DEFAULT_FP16 = os.environ.get("ENGINE_FP16", "true").lower() in {"1", "true", "yes", "on"}
 DEFAULT_INT8 = os.environ.get("ENGINE_INT8", "false").lower() in {"1", "true", "yes", "on"}
 DEFAULT_DATA = os.environ.get("ENGINE_DATA")
-DEFAULT_IMGSZ = [480, 640]
+DEFAULT_IMGSZ = [640]
 
 
 def main() -> None:
@@ -107,7 +107,7 @@ def main() -> None:
         type=int,
         nargs="+",
         default=DEFAULT_IMGSZ,
-        help="Input size as H W (default: 480 640 for landscape camera)",
+        help="Input size as H W or a square side length (default: 640 for TensorRT validation compatibility)",
     )
     parser.add_argument(
         "--workspace",
