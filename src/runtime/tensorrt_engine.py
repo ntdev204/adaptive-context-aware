@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -79,7 +80,7 @@ class _RawTensorRTRunner:
         self.cudart = _load_cudart_module()
         self.logger = trt.Logger(trt.Logger.WARNING)
         runtime = trt.Runtime(self.logger)
-        self.engine = runtime.deserialize_cuda_engine(engine_path.read_bytes())
+        self.engine = _deserialize_engine_blob(runtime, engine_path.read_bytes())
         if self.engine is None:
             raise RuntimeError("TensorRT could not deserialize engine bytes")
         self.context = self.engine.create_execution_context()
@@ -246,3 +247,39 @@ def _load_cudart_module() -> object:
 def _looks_like_cudart(candidate: object) -> bool:
     required = ("cudaMalloc", "cudaMemcpy", "cudaDeviceSynchronize", "cudaFree", "cudaMemcpyKind")
     return all(hasattr(candidate, name) for name in required)
+
+
+def _deserialize_engine_blob(runtime: object, blob: bytes):
+    engine = runtime.deserialize_cuda_engine(blob)
+    if engine is not None:
+        return engine
+
+    unwrapped = _strip_ultralytics_metadata_prefix(blob)
+    if unwrapped is None:
+        return None
+    return runtime.deserialize_cuda_engine(unwrapped)
+
+
+def _strip_ultralytics_metadata_prefix(blob: bytes) -> bytes | None:
+    # Ultralytics TRT10 export may prepend a JSON metadata block before raw engine bytes.
+    if len(blob) < 8:
+        return None
+
+    metadata_len = int.from_bytes(blob[:4], byteorder="little", signed=True)
+    if metadata_len <= 0 or metadata_len > len(blob) - 4:
+        return None
+
+    metadata_end = 4 + metadata_len
+    metadata_bytes = blob[4:metadata_end]
+    engine_bytes = blob[metadata_end:]
+    if not engine_bytes:
+        return None
+
+    try:
+        metadata = json.loads(metadata_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(metadata, dict):
+        return None
+    return engine_bytes
