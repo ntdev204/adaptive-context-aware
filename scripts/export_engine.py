@@ -26,8 +26,8 @@ log = logging.getLogger("export_engine")
 DEFAULT_MODEL_ROOT = os.environ.get("CTX_PT_MODEL_ROOT", "/app/models")
 DEFAULT_OUTPUT_DIR = os.environ.get("CTX_ENGINE_ROOT", "/app/models/engines")
 DEFAULT_CODEBASE_OUTPUT_DIR = os.environ.get("CTX_CODEBASE_ENGINE_ROOT")
-DEFAULT_WORKSPACE_GB = int(os.environ.get("ENGINE_WORKSPACE_GB", "4"))
-DEFAULT_BATCH = int(os.environ.get("ENGINE_BATCH", "8"))
+DEFAULT_WORKSPACE_GB = int(os.environ.get("ENGINE_WORKSPACE_GB", "2"))
+DEFAULT_BATCH = int(os.environ.get("ENGINE_BATCH", "2"))
 DEFAULT_DYNAMIC = os.environ.get("ENGINE_DYNAMIC", "true").lower() in {"1", "true", "yes", "on"}
 DEFAULT_FP16 = os.environ.get("ENGINE_FP16", "true").lower() in {"1", "true", "yes", "on"}
 DEFAULT_INT8 = os.environ.get("ENGINE_INT8", "false").lower() in {"1", "true", "yes", "on"}
@@ -95,7 +95,7 @@ def main() -> None:
         "--batch",
         type=int,
         default=DEFAULT_BATCH,
-        help="Maximum export batch size when dynamic=True (default: ENGINE_BATCH or 8)",
+        help="Maximum export batch size when dynamic=True (default: ENGINE_BATCH or 2)",
     )
     parser.add_argument(
         "--data",
@@ -113,7 +113,7 @@ def main() -> None:
         "--workspace",
         type=int,
         default=DEFAULT_WORKSPACE_GB,
-        help="TensorRT workspace in GB (default: 4 or ENGINE_WORKSPACE_GB)",
+        help="TensorRT workspace in GB (default: 2 or ENGINE_WORKSPACE_GB)",
     )
     args = parser.parse_args()
 
