@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Protocol
@@ -85,6 +86,7 @@ class RuntimePerceptionLoop:
         self._last_frame_sequence: int | None = None
         self._last_frame_timestamp_us: int | None = None
         self._last_error_logged_monotonic = 0.0
+        self._recent_frame_timestamps_us: deque[int] = deque(maxlen=30)
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -118,6 +120,7 @@ class RuntimePerceptionLoop:
         frame_bgr = decode_jpeg_frame(frame.payload)
         camera_ms = (perf_counter() - decode_start) * 1000.0
         delta_time_s = self._delta_time_s(frame)
+        actual_fps = self._update_actual_fps(frame.timestamp_us)
 
         lidar = self.sensor_store.latest_lidar()
         imu = self.sensor_store.latest_imu()
@@ -136,6 +139,7 @@ class RuntimePerceptionLoop:
             timestamp_us=frame.timestamp_us,
             entities=entities,
             timings={**timings, "camera_ms": camera_ms},
+            actual_fps=actual_fps,
         )
         self.result_publisher.publish(message)
         self._last_frame_sequence = frame.sequence
@@ -170,6 +174,16 @@ class RuntimePerceptionLoop:
         delta_us = frame.timestamp_us - self._last_frame_timestamp_us
         return max(delta_us / 1_000_000.0, 1e-3)
 
+    def _update_actual_fps(self, timestamp_us: int) -> float:
+        self._recent_frame_timestamps_us.append(timestamp_us)
+        if len(self._recent_frame_timestamps_us) < 2:
+            return 0.0
+        window_us = self._recent_frame_timestamps_us[-1] - self._recent_frame_timestamps_us[0]
+        if window_us <= 0:
+            return 0.0
+        frames = len(self._recent_frame_timestamps_us) - 1
+        return frames * 1_000_000.0 / window_us
+
     def _log_runtime_error(self, exc: Exception) -> None:
         now = time.monotonic()
         if now - self._last_error_logged_monotonic < 5.0:
@@ -195,13 +209,11 @@ def build_result_message(
     timestamp_us: int,
     entities: list[FusedEntity],
     timings: dict[str, float],
+    actual_fps: float,
 ) -> PerceptionResultMessage:
     total_ms = float(timings.get("total_ms", 0.0))
     if total_ms <= 0.0:
         total_ms = sum(float(value) for value in timings.values())
-    # FPS reflects pipeline throughput — exclude camera_ms (I/O, not compute)
-    pipeline_ms = total_ms - float(timings.get("camera_ms", 0.0))
-    fps = 1000.0 / pipeline_ms if pipeline_ms > 0.0 else 0.0
     return PerceptionResultMessage(
         source_id=source_id,
         sequence=sequence,
@@ -212,7 +224,7 @@ def build_result_message(
             camera_latency_ms=float(timings.get("camera_ms", 0.0)),
             detector_latency_ms=float(timings.get("detector_ms", 0.0)),
             fusion_latency_ms=float(timings.get("fusion_ms", 0.0)),
-            fps=fps,
+            fps=actual_fps,
         ),
     )
 
