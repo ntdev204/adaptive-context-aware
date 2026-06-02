@@ -250,14 +250,13 @@ def _looks_like_cudart(candidate: object) -> bool:
 
 
 def _deserialize_engine_blob(runtime: object, blob: bytes):
-    engine = runtime.deserialize_cuda_engine(blob)
-    if engine is not None:
-        return engine
-
     unwrapped = _strip_ultralytics_metadata_prefix(blob)
-    if unwrapped is None:
-        return None
-    return runtime.deserialize_cuda_engine(unwrapped)
+    if unwrapped is not None:
+        engine = runtime.deserialize_cuda_engine(unwrapped)
+        if engine is not None:
+            return engine
+
+    return runtime.deserialize_cuda_engine(blob)
 
 
 def _strip_ultralytics_metadata_prefix(blob: bytes) -> bytes | None:
