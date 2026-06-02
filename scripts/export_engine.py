@@ -32,7 +32,7 @@ DEFAULT_DYNAMIC = os.environ.get("ENGINE_DYNAMIC", "true").lower() in {"1", "tru
 DEFAULT_FP16 = os.environ.get("ENGINE_FP16", "true").lower() in {"1", "true", "yes", "on"}
 DEFAULT_INT8 = os.environ.get("ENGINE_INT8", "false").lower() in {"1", "true", "yes", "on"}
 DEFAULT_DATA = os.environ.get("ENGINE_DATA")
-DEFAULT_IMGSZ = [640]
+DEFAULT_IMGSZ = [480, 640]
 
 
 def main() -> None:
@@ -106,8 +106,8 @@ def main() -> None:
         "--imgsz",
         type=int,
         nargs="+",
-        default=DEFAULT_IMGSZ,
-        help="Input size as H W or a square side length (default: 640 for TensorRT validation compatibility)",
+        default=_parse_imgsz_env(os.environ.get("ENGINE_IMGSZ"), DEFAULT_IMGSZ),
+        help="Input size as H W or a square side length (default: ENGINE_IMGSZ or 480 640)",
     )
     parser.add_argument(
         "--workspace",
@@ -267,6 +267,16 @@ def _resolve_outputs(pt_files: list[Path], output_dir: Path) -> dict[Path, Path]
         mapping[pt_path] = output_dir / engine_name
 
     return mapping
+
+
+def _parse_imgsz_env(raw: str | None, default: list[int]) -> list[int]:
+    if raw is None or not raw.strip():
+        return default
+    normalized = raw.replace(",", " ")
+    values = [int(part) for part in normalized.split()]
+    if len(values) not in {1, 2}:
+        raise ValueError("ENGINE_IMGSZ must be one integer or H W")
+    return values
 
 
 def _copy_engine_artifact(source: Path, destination: Path) -> None:

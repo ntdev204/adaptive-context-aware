@@ -34,7 +34,7 @@ def test_deserialize_engine_blob_falls_back_to_ultralytics_prefixed_engine() -> 
     engine = _deserialize_engine_blob(runtime, blob)
 
     assert engine is not None
-    assert runtime.calls == [blob, engine_bytes]
+    assert runtime.calls == [engine_bytes]
 
 
 def test_deserialize_engine_blob_returns_raw_engine_immediately() -> None:

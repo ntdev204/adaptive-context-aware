@@ -4,7 +4,13 @@ import sys
 import types
 from pathlib import Path
 
-from scripts.export_engine import _cleanup_intermediate_exports, _copy_engine_artifact, _resolve_outputs, export_model
+from scripts.export_engine import (
+    _cleanup_intermediate_exports,
+    _copy_engine_artifact,
+    _parse_imgsz_env,
+    _resolve_outputs,
+    export_model,
+)
 
 
 def test_resolve_outputs_writes_engines_to_output_dir(tmp_path: Path) -> None:
@@ -40,6 +46,11 @@ def test_cleanup_intermediate_exports_removes_onnx_side_product(tmp_path: Path) 
 
     assert model_path.exists()
     assert not onnx_path.exists()
+
+
+def test_parse_imgsz_env_accepts_camera_shape() -> None:
+    assert _parse_imgsz_env("480 640", [480, 640]) == [480, 640]
+    assert _parse_imgsz_env("480,640", [480, 640]) == [480, 640]
 
 
 def test_export_model_uses_direct_engine_export_and_removes_onnx(tmp_path: Path, monkeypatch) -> None:
