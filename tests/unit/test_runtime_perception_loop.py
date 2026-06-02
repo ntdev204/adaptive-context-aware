@@ -27,11 +27,12 @@ def test_build_result_message_maps_fused_entities_to_result_plane() -> None:
         timestamp_us=123456,
         entities=[entity],
         timings={"camera_ms": 2.0, "detector_ms": 5.0, "fusion_ms": 1.0, "total_ms": 10.0},
+        actual_fps=30.0,
     )
 
     assert message.source_id == "adaptive-runtime"
     assert message.sequence == 11
-    assert message.metrics.fps == pytest.approx(125.0)  # 1000 / (total_ms - camera_ms) = 1000/8
+    assert message.metrics.fps == pytest.approx(30.0)
     assert message.entities[0].track_id == 7
     np.testing.assert_allclose(message.entities[0].bbox_xywh, entity.bbox_xywh)
     np.testing.assert_allclose(message.entities[0].position_xyz_m, entity.position_3d)

@@ -49,7 +49,7 @@ class RuntimeConfig:
     result_publish_port: int = 5556
     heartbeat_port: int = 9093
     heartbeat_interval_ms: int = 500
-    max_sensor_age_ms: int = 250
+    max_sensor_age_ms: int = 1000
     engine_path: str = "/app/models/engines/best.engine"
     pt_model_path: str = "/app/models/fine_tuning/best.pt"
     camera_source: str = "device"
@@ -209,6 +209,24 @@ class JetsonRuntimeController:
             elif _is_stale(snapshot.last_imu_age_ms, self.config.max_sensor_age_ms):
                 ready = False
                 reason = "imu stream is stale"
+            elif self.config.perception_enabled and perception_stats is None:
+                ready = False
+                reason = "waiting for perception loop"
+            elif self.config.perception_enabled and not perception_stats.running:
+                ready = False
+                reason = "waiting for perception loop"
+            elif self.config.perception_enabled and perception_stats.last_error:
+                ready = False
+                reason = f"perception loop error: {perception_stats.last_error}"
+            elif self.config.perception_enabled and perception_stats.frames_processed == 0:
+                ready = False
+                reason = "waiting for perception results"
+            elif self.config.perception_enabled and _is_stale(
+                perception_stats.last_result_age_ms,
+                self.config.camera_frame_timeout_ms,
+            ):
+                ready = False
+                reason = "perception results are stale"
             else:
                 reason = None
         status = RuntimeStatus(

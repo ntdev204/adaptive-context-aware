@@ -11,6 +11,7 @@ ENGINE_WORKSPACE_GB ?= 2
 ENGINE_FP16 ?= true
 ENGINE_INT8 ?= false
 ENGINE_DATA ?=
+ENGINE_IMGSZ ?= 480 640
 
 .PHONY: help install install-dev test test-unit lint fixtures fixtures-download benchmark-ci benchmark-laptop benchmark-jetson baseline-update \
 	build-dev build-prod export-engine up down logs config \
@@ -107,6 +108,7 @@ export-engine:
 		-e ENGINE_FP16="$(ENGINE_FP16)" \
 		-e ENGINE_INT8="$(ENGINE_INT8)" \
 		-e ENGINE_DATA="$(ENGINE_DATA)" \
+		-e ENGINE_IMGSZ="$(ENGINE_IMGSZ)" \
 		context-aware:jetson-dev python3 scripts/export_engine.py \
 			--root /app/models \
 			--output-dir /app/models/engines \

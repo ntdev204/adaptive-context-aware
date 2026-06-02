@@ -120,7 +120,7 @@ def _load_runtime_config() -> RuntimeConfig:
         result_publish_port=int(os.environ.get("CTX_RESULT_PUBLISH_PORT", "5556")),
         heartbeat_port=int(os.environ.get("CTX_HEARTBEAT_PORT", "9093")),
         heartbeat_interval_ms=int(os.environ.get("CTX_HEARTBEAT_INTERVAL_MS", "500")),
-        max_sensor_age_ms=int(os.environ.get("CTX_MAX_SENSOR_AGE_MS", "250")),
+        max_sensor_age_ms=int(os.environ.get("CTX_MAX_SENSOR_AGE_MS", "1000")),
         engine_path=os.environ.get("CTX_ENGINE_MODEL_PATH", "/app/models/engines/best.engine"),
         pt_model_path=os.environ.get("CTX_PT_MODEL_PATH", "/app/models/fine_tuning/best.pt"),
         camera_source=os.environ.get("CTX_CAMERA_SOURCE", "device").strip().lower(),
