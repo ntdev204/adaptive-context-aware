@@ -4,12 +4,15 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 from scripts.export_engine import (
     _cleanup_intermediate_exports,
     _copy_engine_artifact,
     _parse_imgsz_env,
     _resolve_outputs,
     export_model,
+    main,
 )
 
 
@@ -51,6 +54,16 @@ def test_cleanup_intermediate_exports_removes_onnx_side_product(tmp_path: Path) 
 def test_parse_imgsz_env_accepts_camera_shape() -> None:
     assert _parse_imgsz_env("480 640", [480, 640]) == [480, 640]
     assert _parse_imgsz_env("480,640", [480, 640]) == [480, 640]
+
+
+def test_main_reports_invalid_engine_imgsz_as_cli_error(monkeypatch) -> None:
+    monkeypatch.setenv("ENGINE_IMGSZ", "480 640 3")
+    monkeypatch.setattr(sys, "argv", ["export_engine.py"])
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    assert exc_info.value.code == 2
 
 
 def test_export_model_uses_direct_engine_export_and_removes_onnx(tmp_path: Path, monkeypatch) -> None:

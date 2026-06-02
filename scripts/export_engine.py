@@ -37,6 +37,10 @@ DEFAULT_IMGSZ = [480, 640]
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Export all YOLO .pt -> TensorRT .engine")
+    try:
+        default_imgsz = _parse_imgsz_env(os.environ.get("ENGINE_IMGSZ"), DEFAULT_IMGSZ)
+    except ValueError as exc:
+        parser.error(str(exc))
     parser.add_argument(
         "--root",
         default=DEFAULT_MODEL_ROOT,
@@ -106,7 +110,7 @@ def main() -> None:
         "--imgsz",
         type=int,
         nargs="+",
-        default=_parse_imgsz_env(os.environ.get("ENGINE_IMGSZ"), DEFAULT_IMGSZ),
+        default=default_imgsz,
         help="Input size as H W or a square side length (default: ENGINE_IMGSZ or 480 640)",
     )
     parser.add_argument(
